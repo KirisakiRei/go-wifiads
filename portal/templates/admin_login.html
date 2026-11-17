@@ -1,0 +1,38 @@
+{{define "admin_login.html"}}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  {{template "head" .}}
+</head>
+<body class="login-body">
+  <main class="login-wrap">
+    <div class="login-card">
+      <div class="login-brand">
+        <span class="brand-dot" aria-hidden="true"></span>
+        <span class="login-brand-name">{{.AppName}}</span>
+      </div>
+      <p class="login-sub">Portal Administrasi Wi-Fi Advertising</p>
+
+      <form id="login-form" autocomplete="on">
+        <div class="field">
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" required autofocus placeholder="admin">
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" required placeholder="••••••••">
+        </div>
+        <button type="submit" class="login-submit">Masuk ke Sistem</button>
+      </form>
+
+      <div id="login-notice" class="notice" role="alert" aria-live="polite" hidden></div>
+
+      <div class="login-footer">
+        <span>Go WiFiAds Platform • Alpha v0.1</span>
+      </div>
+    </div>
+  </main>
+  <script src="/static/js/admin.js"></script>
+</body>
+</html>
+{{end}}

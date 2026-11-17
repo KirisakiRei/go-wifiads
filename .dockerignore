@@ -1,0 +1,25 @@
+# Everything not needed inside the build context.
+.git
+.gitignore
+ssh/
+.env
+.env.*
+
+# Local runtime data
+logs/
+uploads/
+*.log
+*.exe
+/bin/
+
+# Frontend deps: rebuilt in the builder stage from package-lock.json
+admin/node_modules/
+admin/dist/
+admin/.env.local
+
+# Docs / design artefacts
+stitch_wifi_ads_saas_dashboard/
+PRD_*.md
+AGENTS.md
+*.bat
+*.ps1

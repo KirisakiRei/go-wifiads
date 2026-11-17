@@ -1,0 +1,21 @@
+{{define "error.html"}}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  {{template "head" .}}
+</head>
+<body style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1.5rem 1rem;">
+  <main style="width: 100%; max-width: 460px;">
+    <div class="card" style="padding: 2rem 1.75rem; text-align: center;">
+      <div style="font-size: 2rem; margin-bottom: 0.5rem;">⚠️</div>
+      <h1 style="margin-bottom: 0.5rem;">Terjadi Kesalahan</h1>
+      <p class="subtitle" style="margin-bottom: 1.25rem;">{{.Message}}</p>
+      <div style="margin-bottom: 1.5rem;">
+        <span class="mono" style="color: var(--danger); font-weight: 600;">Status HTTP: {{.Status}}</span>
+      </div>
+      <a href="/admin/overview" class="btn" style="width: 100%;">Kembali ke Dashboard Utama</a>
+    </div>
+  </main>
+</body>
+</html>
+{{end}}

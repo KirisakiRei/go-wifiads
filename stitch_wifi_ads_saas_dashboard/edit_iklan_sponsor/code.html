@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={"darkMode":"class","theme":{"extend":{"colors":{"tertiary-container":"#545c72","primary":"#0037b0","on-tertiary":"#ffffff","outline":"#747686","on-background":"#0b1c30","on-secondary-fixed-variant":"#004c69","error":"#ba1a1a","on-primary-container":"#cad3ff","background":"#f8f9ff","secondary":"#00668a","primary-fixed-dim":"#b7c4ff","tertiary-fixed":"#dae2fd","surface-bright":"#f8f9ff","secondary-fixed":"#c4e7ff","on-error-container":"#93000a","surface-container-high":"#dce9ff","surface-container-lowest":"#ffffff","inverse-surface":"#213145","on-primary-fixed-variant":"#0039b5","surface-tint":"#2151da","outline-variant":"#c4c5d7","tertiary":"#3d445a","surface-container-low":"#eff4ff","surface-container":"#e5eeff","on-primary":"#ffffff","on-tertiary-fixed-variant":"#3f465c","error-container":"#ffdad6","surface-container-highest":"#d3e4fe","on-error":"#ffffff","surface":"#f8f9ff","secondary-container":"#40c2fd","on-primary-fixed":"#001551","on-secondary-fixed":"#001e2c","on-secondary":"#ffffff","primary-container":"#1d4ed8","on-surface-variant":"#434655","on-surface":"#0b1c30","inverse-primary":"#b7c4ff","on-tertiary-container":"#cdd5ef","inverse-on-surface":"#eaf1ff","on-tertiary-fixed":"#131b2e","surface-dim":"#cbdbf5","secondary-fixed-dim":"#7bd0ff","surface-variant":"#d3e4fe","tertiary-fixed-dim":"#bec6e0","on-secondary-container":"#004d6a","primary-fixed":"#dce1ff"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"space-md":"1rem","space-xl":"2rem","space-xs":"0.25rem","gutter-sm":"1rem","margin":"2rem","space-sm":"0.5rem","gutter":"1.5rem","space-lg":"1.5rem","margin-sm":"1rem"},"fontFamily":{"body-sm":["Plus Jakarta Sans"],"headline-lg":["Plus Jakarta Sans"],"headline-xl":["Plus Jakarta Sans"],"telemetry-metric":["Plus Jakarta Sans"],"body-md":["Plus Jakarta Sans"],"telemetry-code":["Plus Jakarta Sans"],"label-sm":["Plus Jakarta Sans"],"headline-md":["Plus Jakarta Sans"],"label-md":["Plus Jakarta Sans"],"title-sm":["Plus Jakarta Sans"],"body-lg":["Plus Jakarta Sans"]},"fontSize":{"body-sm":["12px",{"lineHeight":"16px","letterSpacing":"0.01em","fontWeight":"400"}],"headline-lg":["24px",{"lineHeight":"32px","letterSpacing":"-0.015em","fontWeight":"600"}],"headline-xl":["32px",{"lineHeight":"40px","letterSpacing":"-0.02em","fontWeight":"700"}],"telemetry-metric":["28px",{"lineHeight":"34px","letterSpacing":"-0.02em","fontWeight":"700"}],"body-md":["14px",{"lineHeight":"20px","letterSpacing":"0em","fontWeight":"400"}],"telemetry-code":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"label-sm":["11px",{"lineHeight":"14px","letterSpacing":"0.04em","fontWeight":"600"}],"headline-md":["20px",{"lineHeight":"28px","letterSpacing":"-0.01em","fontWeight":"600"}],"label-md":["13px",{"lineHeight":"18px","letterSpacing":"0.01em","fontWeight":"600"}],"title-sm":["16px",{"lineHeight":"24px","letterSpacing":"0em","fontWeight":"600"}],"body-lg":["16px",{"lineHeight":"24px","letterSpacing":"0em","fontWeight":"400"}]}}}}</script></head><body class="bg-surface font-body-md text-on-surface"><aside class="fixed left-0 top-0 h-full w-64 bg-surface-container-lowest z-50 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="flex flex-col"><div class="h-16 px-space-md flex items-center justify-between"><div class="flex items-center gap-space-sm"><img alt="AdWave WiFi Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1VBRzlZu2dqNgSTASaN8-razdl7YEWg2loQObTggT7slm5g0NeTp3tVvaqlAmhYnjgwvVSfoljMW4InmJMqsfTL5EVQmlV7ty-wxkD3279JESlW9r-YkdVTVte-P-QS286km-5eDybS_llXKhSTIY5TsSetAJZo2DBzP_RB2CN_fXn8AOUCJ04ClclPrNRMmTZEzGAjJ_0ptY2l4K0YfKSAIb1Y5saiwoK95RLfBRzOcQ"/><div class="flex flex-col"><span class="font-title-sm text-title-sm text-on-surface leading-tight">AdWave WiFi</span><span class="font-label-sm text-label-sm text-on-surface-variant">MikroTik SaaS</span></div></div></div><div class="px-space-md py-space-xs"><div class="flex items-center gap-space-xs bg-surface-container-low px-space-sm py-space-xs rounded-lg"><span class="w-2 h-2 rounded-full bg-secondary shrink-0"></span><span class="font-telemetry-code text-telemetry-code text-secondary truncate">RouterOS v7.14 • 12 Active</span></div></div><div class="px-space-md pt-space-md pb-space-xs"><span class="font-label-sm text-label-sm uppercase text-outline tracking-wider">Navigasi Utama</span></div><nav class="flex flex-col gap-space-xs px-space-sm" data-active-classes="bg-primary-container text-on-primary font-title-sm rounded-xl"><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant font-label-md text-label-md hover:bg-surface-container hover:text-on-surface transition-all" data-path="dashboard" href="#"><span class="material-symbols-outlined text-[20px]">grid_view</span><span>Dashboard</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant font-label-md text-label-md hover:bg-surface-container hover:text-on-surface transition-all" data-path="profil-paket" href="#"><span class="material-symbols-outlined text-[20px]">speed</span><span>Profil Paket</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant font-label-md text-label-md hover:bg-surface-container hover:text-on-surface transition-all" data-path="iklan-sponsor" href="#"><span class="material-symbols-outlined text-[20px]">campaign</span><span>Iklan Sponsor</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant font-label-md text-label-md hover:bg-surface-container hover:text-on-surface transition-all" data-path="manajemen-voucher" href="#"><span class="material-symbols-outlined text-[20px]">confirmation_number</span><span>Manajemen Voucher</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant font-label-md text-label-md hover:bg-surface-container hover:text-on-surface transition-all" data-path="pengunjung" href="#"><span class="material-symbols-outlined text-[20px]">group</span><span>Pengunjung</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant font-label-md text-label-md hover:bg-surface-container hover:text-on-surface transition-all" data-path="sesi-radius" href="#"><span class="material-symbols-outlined text-[20px]">sync_alt</span><span>Sesi RADIUS</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant font-label-md text-label-md hover:bg-surface-container hover:text-on-surface transition-all" data-path="pengguna-admin" href="#"><span class="material-symbols-outlined text-[20px]">admin_panel_settings</span><span>Pengguna Admin</span></a></nav></div><div class="p-space-md"><div class="bg-surface-container-low rounded-xl p-space-sm flex items-center justify-between"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-secondary text-[20px]">dns</span><div class="flex flex-col"><span class="font-label-sm text-label-sm text-on-surface">Fleet Sync</span><span class="font-telemetry-code text-telemetry-code text-outline">100% Online</span></div></div><span class="w-2 h-2 rounded-full bg-secondary"></span></div></div></aside><div class="pl-64"><header class="fixed top-0 left-64 right-0 h-16 bg-surface-container-lowest/90 backdrop-blur-xl z-40 shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="w-full h-full px-gutter flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-md flex-1 max-w-xl"><div class="flex items-center gap-space-xs font-label-md text-label-md text-outline"><span class="material-symbols-outlined text-[18px]">home</span><span>/</span><span class="text-on-surface font-title-sm text-title-sm">Gateway Console</span></div><div class="relative flex-1 hidden md:block"><span class="material-symbols-outlined absolute left-space-sm top-1/2 -translate-y-1/2 text-outline text-[18px]">search</span><input class="w-full bg-surface-container-low font-body-sm text-body-sm text-on-surface placeholder:text-outline pl-9 pr-space-md py-space-xs rounded-xl outline-none focus:bg-surface-container transition-all" placeholder="Cari MAC address, voucher, campaign..." type="text"/></div></div><div class="flex items-center gap-space-md"><div class="hidden lg:flex items-center gap-space-xs bg-surface-container-low px-space-sm py-space-xs rounded-xl"><span class="material-symbols-outlined text-secondary text-[18px]">router</span><div class="flex flex-col text-left"><span class="font-label-sm text-label-sm text-on-surface leading-none">MikroTik Gateway Central</span><span class="font-telemetry-code text-telemetry-code text-outline">(192.168.88.1)</span></div><span class="material-symbols-outlined text-outline text-[16px] ml-space-xs">expand_more</span></div><button aria-label="Notifications" class="relative p-space-xs rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all"><span class="material-symbols-outlined text-[22px]">notifications</span><span class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span></button><div class="flex items-center gap-space-sm pl-space-xs"><div class="hidden sm:flex flex-col text-right"><span class="font-label-md text-label-md text-on-surface leading-tight">Network Admin</span><span class="font-label-sm text-label-sm text-outline">Superuser</span></div><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></div></header><main class="w-full pt-16 bg-surface"><div class="flex flex-col w-full">
+<div class="w-full max-w-[1560px] mx-auto px-gutter py-space-md flex flex-col gap-space-lg">
+<!-- Section 1: Header, Breadcrumbs & Quick Metrics -->
+<div class="flex flex-col gap-space-sm">
+<div class="flex flex-wrap items-center justify-between gap-space-sm">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-xs font-label-md text-label-md text-outline">
+<a class="hover:text-primary transition-colors" href="#">Gateway Console</a>
+<span>/</span>
+<a class="hover:text-primary transition-colors" href="#">Iklan Sponsor</a>
+<span>/</span>
+<span class="text-on-surface font-title-sm text-title-sm">Edit Kampanye</span>
+</div>
+<div class="flex flex-wrap items-center gap-space-sm pt-space-xs">
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Edit Iklan: Telco Extra Data 100GB</h1>
+<div class="flex items-center gap-space-xs bg-surface-container-low px-space-sm py-1 rounded-full">
+<span class="w-2 h-2 rounded-full bg-secondary shrink-0"></span>
+<span class="font-label-sm text-label-sm text-secondary">Sedang Tayang (Active)</span>
+</div>
+<span class="font-telemetry-code text-telemetry-code text-on-surface-variant bg-surface-container px-space-sm py-1 rounded-md">ID: CMP-2025-018</span>
+</div>
+</div>
+<!-- Action Header Buttons -->
+<div class="flex items-center gap-space-sm">
+<button class="flex items-center gap-space-xs px-space-md py-space-sm bg-surface-container-lowest text-on-surface font-label-md text-label-md rounded-xl shadow-sm hover:bg-surface-container-low transition-all" type="button">
+<span class="material-symbols-outlined text-[18px] text-tertiary">pause_circle</span>
+<span>Hentikan Sementara</span>
+</button>
+<button class="px-space-md py-space-sm bg-surface-container-lowest text-on-surface-variant font-label-md text-label-md rounded-xl shadow-sm hover:bg-surface-container hover:text-on-surface transition-all" type="button">
+            Batal
+          </button>
+<button class="flex items-center gap-space-xs px-space-lg py-space-sm bg-primary-container text-on-primary font-label-md text-label-md rounded-xl shadow-sm hover:bg-primary transition-all" id="save-campaign-btn" type="button">
+<span class="material-symbols-outlined text-[18px]">cloud_sync</span>
+<span>Simpan &amp; Sync ke MikroTik</span>
+</button>
+</div>
+</div>
+<!-- Quick Telemetry Bar -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-sm bg-surface-container-lowest p-space-sm rounded-xl shadow-sm">
+<div class="flex items-center justify-between px-space-md py-space-xs bg-surface-container-low rounded-lg">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-secondary text-[20px]">visibility</span>
+<span class="font-label-md text-label-md text-on-surface-variant">Total Impresi Target</span>
+</div>
+<div class="flex items-baseline gap-space-xs">
+<span class="font-title-sm text-title-sm text-on-surface">124.500</span>
+<span class="font-telemetry-code text-telemetry-code text-outline">/ 150k (83%)</span>
+</div>
+</div>
+<div class="flex items-center justify-between px-space-md py-space-xs bg-surface-container-low rounded-lg">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[20px]">ads_click</span>
+<span class="font-label-md text-label-md text-on-surface-variant">Click-Through Rate (CTR)</span>
+</div>
+<div class="flex items-baseline gap-space-xs">
+<span class="font-title-sm text-title-sm text-primary">15.4%</span>
+<span class="font-telemetry-code text-telemetry-code text-secondary">+2.1% benchmark</span>
+</div>
+</div>
+<div class="flex items-center justify-between px-space-md py-space-xs bg-surface-container-low rounded-lg">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-secondary text-[20px]">router</span>
+<span class="font-label-md text-label-md text-on-surface-variant">Sebaran Node Gateway</span>
+</div>
+<div class="flex items-baseline gap-space-xs">
+<span class="font-title-sm text-title-sm text-on-surface">12 Router Aktif</span>
+<span class="font-telemetry-code text-telemetry-code text-secondary">Fleet Synced</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Section 2: Main Two-Column Workflow -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
+<!-- ================= LEFT COLUMN: CAMPAIGN CONFIGURATION (8 COLS) ================= -->
+<div class="lg:col-span-7 xl:col-span-8 flex flex-col gap-space-lg">
+<!-- Card 1: Sponsor & Campaign Meta -->
+<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[22px]">corporate_fare</span>
+<h2 class="font-title-sm text-title-sm text-on-surface">Detail Sponsor &amp; Informasi Kampanye</h2>
+</div>
+<span class="font-label-sm text-label-sm text-outline uppercase tracking-wider">Identitas Iklan</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-space-md pt-space-xs">
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface" for="camp-name">Nama Kampanye</label>
+<input class="w-full bg-surface-container-low font-body-md text-body-md text-on-surface px-space-md py-space-sm rounded-lg outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container transition-all" id="camp-name" type="text" value="Telco Extra Data 100GB"/>
+</div>
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface" for="camp-sponsor">Nama Pengiklan / Client</label>
+<input class="w-full bg-surface-container-low font-body-md text-body-md text-on-surface px-space-md py-space-sm rounded-lg outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container transition-all" id="camp-sponsor" type="text" value="PT Telekomunikasi Digital Mandiri"/>
+</div>
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface" for="camp-category">Kategori Industri</label>
+<select class="w-full bg-surface-container-low font-body-md text-body-md text-on-surface px-space-md py-space-sm rounded-lg outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container transition-all cursor-pointer" id="camp-category">
+<option selected="">Telco &amp; Internet Service Provider</option>
+<option>FMCG &amp; Retail Beverages</option>
+<option>Fintech, Perbankan &amp; E-Wallet</option>
+<option>E-Commerce &amp; Flash Sale Promosi</option>
+</select>
+</div>
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface" for="camp-period">Periode Penayangan</label>
+<div class="flex items-center gap-space-xs bg-surface-container-low px-space-md py-space-sm rounded-lg">
+<span class="material-symbols-outlined text-outline text-[18px]">calendar_today</span>
+<input class="bg-transparent font-body-md text-body-md text-on-surface w-full outline-none" id="camp-period" type="text" value="1 Jun 2025 - 30 Jun 2025"/>
+<span class="font-label-sm text-label-sm text-secondary bg-secondary-fixed px-space-xs py-0.5 rounded shrink-0">Hari 14/30</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 2: Media Asset & Aspect Ratio Config -->
+<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[22px]">video_library</span>
+<h2 class="font-title-sm text-title-sm text-on-surface">Format Media &amp; Orientasi Layar</h2>
+</div>
+<span class="font-label-sm text-label-sm text-secondary bg-secondary-fixed px-space-sm py-0.5 rounded-full">Web Optimized MP4</span>
+</div>
+<!-- Format Selector Pill Buttons -->
+<div class="flex flex-col gap-space-xs">
+<span class="font-label-md text-label-md text-on-surface">Pilih Format Iklan</span>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
+<button class="flex items-center gap-space-sm p-space-sm rounded-xl bg-primary-container text-on-primary shadow-sm text-left transition-all" type="button">
+<span class="material-symbols-outlined text-[24px]">smart_display</span>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md font-semibold">Video Interaktif (MP4)</span>
+<span class="font-body-sm text-body-sm opacity-90">Maks. 30 detik • Retensi tinggi</span>
+</div>
+</button>
+<button class="flex items-center gap-space-sm p-space-sm rounded-xl bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-on-surface text-left transition-all" type="button">
+<span class="material-symbols-outlined text-[24px]">image</span>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md font-semibold">Banner Grafis (JPG / PNG)</span>
+<span class="font-body-sm text-body-sm text-outline">Gambar statis responsif</span>
+</div>
+</button>
+</div>
+</div>
+<!-- Aspect Ratio Options -->
+<div class="flex flex-col gap-space-xs pt-space-xs">
+<span class="font-label-md text-label-md text-on-surface">Rasio Aspek &amp; Orientasi Captive Portal</span>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
+<label class="flex items-start gap-space-sm p-space-sm bg-surface-container-low rounded-xl cursor-pointer hover:bg-surface-container transition-all">
+<input checked="" class="mt-1 accent-primary" name="ratio_opt" type="radio"/>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface flex items-center gap-space-xs">
+                    Landscape (16:9)
+                    <span class="font-label-sm text-label-sm bg-surface-container px-space-xs rounded text-outline">1920x1080</span>
+</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Default laptop &amp; mode rotasi tablet</span>
+</div>
+</label>
+<label class="flex items-start gap-space-sm p-space-sm bg-surface-container-low rounded-xl cursor-pointer hover:bg-surface-container transition-all">
+<input class="mt-1 accent-primary" name="ratio_opt" type="radio"/>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface flex items-center gap-space-xs">
+                    Portrait (9:16)
+                    <span class="font-label-sm text-label-sm bg-surface-container px-space-xs rounded text-outline">1080x1920</span>
+</span>
+<span class="font-body-sm text-body-sm text-secondary">Rekomendasi 92% Smartphone</span>
+</div>
+</label>
+</div>
+<!-- Soft blue banner notice -->
+<div class="flex items-start gap-space-xs bg-surface-container-low p-space-sm rounded-lg mt-space-xs">
+<span class="material-symbols-outlined text-primary text-[18px] shrink-0 mt-0.5">tips_and_updates</span>
+<p class="font-body-sm text-body-sm text-on-surface">
+                Anda dapat mengganti materi ke rasio Portrait 9:16 untuk optimalisasi pengalaman 92% pengunjung smartphone yang login via Hotspot Captive Portal.
+              </p>
+</div>
+</div>
+<!-- Active File Telemetry & Upload Row -->
+<div class="flex flex-col gap-space-xs pt-space-xs">
+<span class="font-label-md text-label-md text-on-surface">Berkas Video Saat Ini</span>
+<div class="flex flex-col sm:flex-row items-center justify-between gap-space-md p-space-md bg-surface-container-low rounded-xl">
+<div class="flex items-center gap-space-md w-full sm:w-auto">
+<div class="relative w-24 h-16 rounded-lg overflow-hidden bg-inverse-surface shrink-0 shadow-sm">
+<img class="w-full h-full object-cover" data-alt="Modern smartphone displaying vivid 5G high speed internet graphic advertisement banner with sleek blue futuristic waves on clean studio lighting, high commercial grade." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAnztRvnJYvvbLQuE1Q-d58X1N4AnHzBIJRqv8Nb644H2tsMwG4esUp7Ba2mKxi7lXaYy9JetCM0ovLsqmUSMtgSKkyOVo3RGLkEeN8LHc88Z6iY6v7MEMIclCTndA0TulxmxhQiPQ2ep7I89GyelChsLRX--CH1g6DeLB_ti8cSkuVUU239yLm7l19f9aQ1mo9ZFs5CqgDH2P6wqjZey0_WD-N4zXqExscgIbHhoyj"/>
+<div class="absolute inset-0 bg-inverse-surface/30 flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-[20px]">play_arrow</span>
+</div>
+<span class="absolute bottom-1 right-1 font-telemetry-code text-label-sm text-on-primary bg-inverse-surface/80 px-1 rounded text-[10px]">00:15</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface truncate">telco_promo_100gb_q2_h264.mp4</span>
+<span class="font-telemetry-code text-telemetry-code text-outline">14.2 MB • H.264 / AAC 1080p • 15 Detik</span>
+<span class="font-body-sm text-body-sm text-secondary flex items-center gap-space-xs mt-0.5">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                    CDN Edge Terdistribusi (Router Ready)
+                  </span>
+</div>
+</div>
+<div class="flex items-center gap-space-xs shrink-0 w-full sm:w-auto justify-end">
+<button class="p-space-xs bg-surface-container-lowest text-on-surface-variant hover:text-on-surface rounded-lg shadow-sm" title="Unduh Aset Aktif" type="button">
+<span class="material-symbols-outlined text-[18px]">download</span>
+</button>
+<button class="flex items-center gap-space-xs px-space-md py-space-xs bg-surface-container-lowest text-primary font-label-md text-label-md rounded-lg shadow-sm hover:bg-surface-container transition-all" type="button">
+<span class="material-symbols-outlined text-[18px]">file_upload</span>
+<span>Ganti File Video</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Video Playback Constraints -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-space-md pt-space-xs">
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface" for="skip-delay">Durasi Wajib Nonton (Skip Delay)</label>
+<div class="flex items-center gap-space-sm bg-surface-container-low px-space-md py-space-sm rounded-lg">
+<span class="material-symbols-outlined text-outline text-[18px]">timer</span>
+<input class="bg-transparent font-title-sm text-title-sm text-on-surface w-16 outline-none" id="skip-delay" max="30" min="0" type="number" value="5"/>
+<span class="font-body-md text-body-md text-outline">Detik sebelum tombol 'Lewati' aktif</span>
+</div>
+</div>
+<div class="flex flex-col justify-end">
+<label class="flex items-center gap-space-sm p-space-sm bg-surface-container-low rounded-lg cursor-pointer hover:bg-surface-container transition-all">
+<input checked="" class="w-4 h-4 accent-primary rounded" type="checkbox"/>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface">Mute Audio Otomatis</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Sesuai standar Autoplay browser mobile modern</span>
+</div>
+</label>
+</div>
+</div>
+</div>
+<!-- Card 3: Interaction, CTA & Conversion -->
+<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[22px]">touch_app</span>
+<h2 class="font-title-sm text-title-sm text-on-surface">Interaksi Pengunjung, Tombol CTA &amp; Destination</h2>
+</div>
+<span class="font-label-sm text-label-sm text-outline uppercase tracking-wider">Konversi</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-space-md pt-space-xs">
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface" for="cta-action">Tipe Respon &amp; Konversi</label>
+<select class="w-full bg-surface-container-low font-body-md text-body-md text-on-surface px-space-md py-space-sm rounded-lg outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container transition-all cursor-pointer" id="cta-action">
+<option selected="">Klik Tombol CTA ke Landing Page Eksternal</option>
+<option>Langsung Buka WhatsApp Admin Promosi</option>
+<option>Formulir Lead Generation (Nama &amp; No HP)</option>
+</select>
+</div>
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface" for="cta-label">Teks Label Tombol CTA</label>
+<input class="w-full bg-surface-container-low font-body-md text-body-md text-on-surface px-space-md py-space-sm rounded-lg outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container transition-all" id="cta-label" type="text" value="Aktifkan Kuota 100GB Sekarang"/>
+</div>
+<div class="md:col-span-2 flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface" for="landing-url">URL Destination Target</label>
+<div class="flex items-center gap-space-xs bg-surface-container-low px-space-md py-space-xs rounded-lg">
+<span class="material-symbols-outlined text-outline text-[18px]">link</span>
+<input class="w-full bg-transparent font-telemetry-code text-telemetry-code text-on-surface outline-none" id="landing-url" type="url" value="https://sponsor.telcodata.id/promo-5g-hotspot"/>
+<a class="flex items-center gap-space-xs px-space-sm py-1 bg-surface-container text-primary font-label-sm text-label-sm rounded hover:bg-surface-container-high transition-all shrink-0" href="https://sponsor.telcodata.id/promo-5g-hotspot" rel="noopener noreferrer" target="_blank">
+<span>Uji Tautan</span>
+<span class="material-symbols-outlined text-[14px]">open_in_new</span>
+</a>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 4: Hotspot Allocation & MikroTik RouterOS Fleet Policies -->
+<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[22px]">dns</span>
+<h2 class="font-title-sm text-title-sm text-on-surface">Alokasi Hotspot, Kuota &amp; Integrasi RouterOS</h2>
+</div>
+<span class="font-telemetry-code text-telemetry-code text-primary bg-primary-fixed px-space-sm py-0.5 rounded-full">MikroTik Queue Tree</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-space-md pt-space-xs">
+<!-- Node Deployment Selector -->
+<div class="flex flex-col gap-space-xs md:col-span-2">
+<label class="font-label-md text-label-md text-on-surface">Distribusi Lokasi Gateway (MikroTik Nodes)</label>
+<div class="p-space-sm bg-surface-container-low rounded-xl flex flex-col gap-space-xs">
+<div class="flex items-center justify-between pb-space-xs">
+<div class="flex items-center gap-space-xs">
+<input checked="" class="w-4 h-4 accent-primary rounded" id="fleet-all" type="checkbox"/>
+<label class="font-label-md text-label-md text-on-surface font-semibold" for="fleet-all">Terapkan ke Seluruh Router (12 MikroTik Gateway)</label>
+</div>
+<span class="font-telemetry-code text-telemetry-code text-secondary">Fleet-Wide Active</span>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-space-xs pt-space-xs">
+<div class="flex items-center gap-space-xs bg-surface-container-lowest px-space-sm py-space-xs rounded-lg">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="font-telemetry-code text-telemetry-code text-on-surface truncate">RB4011 - Mall Lobby</span>
+</div>
+<div class="flex items-center gap-space-xs bg-surface-container-lowest px-space-sm py-space-xs rounded-lg">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="font-telemetry-code text-telemetry-code text-on-surface truncate">CCR2004 - Foodcourt</span>
+</div>
+<div class="flex items-center gap-space-xs bg-surface-container-lowest px-space-sm py-space-xs rounded-lg">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="font-telemetry-code text-telemetry-code text-on-surface truncate">+ 10 Node Lainnya</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Free internet allowance -->
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface" for="session-time">Hadiah Kuota Internet Bebas</label>
+<select class="w-full bg-surface-container-low font-body-md text-body-md text-on-surface px-space-md py-space-sm rounded-lg outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container transition-all cursor-pointer" id="session-time">
+<option>30 Menit Akses</option>
+<option selected="">60 Menit (1 Jam Akses Penuh)</option>
+<option>120 Menit (2 Jam Akses)</option>
+<option>Unlimited sampai Jam 23:59</option>
+</select>
+</div>
+<!-- Frequency capping -->
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface" for="freq-cap">Limitasi Tayang (MAC Address Capping)</label>
+<select class="w-full bg-surface-container-low font-body-md text-body-md text-on-surface px-space-md py-space-sm rounded-lg outline-none focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container transition-all cursor-pointer" id="freq-cap">
+<option>1 Kali per Hari per MAC</option>
+<option selected="">Maksimal 2 Kali per Hari per MAC</option>
+<option>Tanpa Limitasi (Setiap Re-connect)</option>
+</select>
+</div>
+<!-- MikroTik Rate Limit Parameters -->
+<div class="md:col-span-2 flex flex-col gap-space-xs">
+<div class="flex items-center justify-between">
+<label class="font-label-md text-label-md text-on-surface">MikroTik QoS Bandwidth Policy (Rate Limit)</label>
+<span class="font-telemetry-code text-telemetry-code text-outline">MikroTik-Rate-Limit: 2048k/5120k</span>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-space-sm bg-surface-container-low p-space-sm rounded-xl">
+<div class="flex items-center justify-between bg-surface-container-lowest px-space-md py-space-xs rounded-lg">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[18px]">download</span>
+<span class="font-label-md text-label-md text-on-surface-variant">Download Max</span>
+</div>
+<span class="font-title-sm text-title-sm text-on-surface">5 Mbps</span>
+</div>
+<div class="flex items-center justify-between bg-surface-container-lowest px-space-md py-space-xs rounded-lg">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-secondary text-[18px]">upload</span>
+<span class="font-label-md text-label-md text-on-surface-variant">Upload Max</span>
+</div>
+<span class="font-title-sm text-title-sm text-on-surface">2 Mbps</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- ================= RIGHT COLUMN: LIVE SIMULATOR & AUDIT LOG (4 COLS) ================= -->
+<div class="lg:col-span-5 xl:col-span-4 flex flex-col gap-space-lg sticky top-20">
+<!-- Card 1: Live Captive Portal Simulator -->
+<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-primary text-[20px]">phone_android</span>
+<h2 class="font-title-sm text-title-sm text-on-surface">Pratinjau Live Portal</h2>
+</div>
+<!-- Toggle Device View -->
+<div class="flex items-center bg-surface-container-low p-0.5 rounded-lg text-outline" id="device-switcher">
+<button class="px-space-xs py-1 rounded font-label-sm text-label-sm text-on-surface-variant hover:text-on-surface transition-all flex items-center" id="btn-view-desktop" type="button">
+<span class="material-symbols-outlined text-[16px]">laptop</span>
+</button>
+<button class="px-space-xs py-1 rounded font-label-sm text-label-sm bg-surface-container-lowest text-primary shadow-sm transition-all flex items-center" id="btn-view-mobile" type="button">
+<span class="material-symbols-outlined text-[16px]">smartphone</span>
+</button>
+</div>
+</div>
+<!-- Captive Portal Mockup Frame -->
+<div class="w-full flex justify-center py-space-xs">
+<div class="w-full max-w-[310px] bg-surface-container rounded-2xl p-2.5 shadow-md flex flex-col gap-space-xs transition-all duration-300" id="portal-frame">
+<!-- Simulated Mobile Browser Bar -->
+<div class="w-full bg-surface-container-lowest rounded-lg px-2.5 py-1.5 flex items-center justify-between text-outline">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px]">lock</span>
+<span class="font-telemetry-code text-[11px] text-on-surface-variant truncate">hotspot.adwave.id/login</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-secondary">wifi</span>
+<span class="font-telemetry-code text-[10px]">100%</span>
+</div>
+</div>
+<!-- Hotspot Interactive Screen Mockup -->
+<div class="w-full bg-surface-container-lowest rounded-xl overflow-hidden flex flex-col">
+<!-- Portal Brand Strip -->
+<div class="h-8 bg-surface-container-low px-space-sm flex items-center justify-between">
+<span class="font-label-sm text-[11px] font-semibold text-primary">AdWave WiFi Free</span>
+<span class="font-telemetry-code text-[10px] text-outline">MikroTik Hotspot</span>
+</div>
+<!-- Ad Video Stage -->
+<div class="relative w-full aspect-video bg-inverse-surface overflow-hidden group">
+<img class="w-full h-full object-cover" data-alt="High tech cellular telecom promotional campaign graphic showing 5G speed stream with ultra-clean modern corporate cyan and blue color tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDKfCCHnY4kdxvuai14RNqrB-YlvDltdNLdTLeghWPJbzjNF6_Ezlqptpb3COh1LlWdTyM_GOSisQ1yANT_QgeBmbVovh0Vu_W6a0VYbV_uk6_Iag_9W1SpvmO9Fo3_FyzmXu6jZmbhG-O29nXhDMSgp3alZrZJml9NQvmFJGDfgr4oBGCXIW6UQ_c-zV5YCbBb7psUA3z1ptoNRjmrg31kCseW5OnmHk1Qxjz1GBc9"/>
+<!-- Floating Countdown Skip Button -->
+<div class="absolute top-2 right-2 bg-inverse-surface/80 backdrop-blur-sm px-2 py-0.5 rounded text-on-primary font-telemetry-code text-[10px] flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px] text-secondary-fixed">hourglass_empty</span>
+<span>Lewati (5s)</span>
+</div>
+<!-- Floating Sound Indicator -->
+<div class="absolute bottom-2 left-2 bg-inverse-surface/75 px-1.5 py-0.5 rounded-full text-on-primary">
+<span class="material-symbols-outlined text-[12px]">volume_off</span>
+</div>
+<!-- Video Duration Progress Line -->
+<div class="absolute bottom-0 left-0 right-0 h-1 bg-surface-container-highest">
+<div class="h-full bg-secondary-container w-2/5"></div>
+</div>
+</div>
+<!-- Captive Portal Action Section -->
+<div class="p-space-sm flex flex-col gap-space-xs text-center bg-surface-container-lowest">
+<span class="font-label-sm text-label-sm text-outline uppercase tracking-wider">Sponsor Hotspot</span>
+<p class="font-label-md text-label-md font-semibold text-on-surface leading-tight">Telco Extra Data 100GB</p>
+<p class="font-body-sm text-[11px] text-on-surface-variant line-clamp-2">Dapatkan bonus kuota 100GB aktivasi instan melalui jaringan WiFi super cepat.</p>
+<!-- Simulated CTA Button -->
+<button class="w-full mt-1 py-1.5 bg-primary-container text-on-primary font-label-sm text-label-sm rounded-lg hover:bg-primary transition-all" type="button">
+                    Aktifkan Kuota 100GB Sekarang
+                  </button>
+<div class="pt-1 flex items-center justify-center gap-1 text-outline">
+<span class="material-symbols-outlined text-[12px]">verified_user</span>
+<span class="font-label-sm text-[10px]">Autentikasi Aman via RADIUS MikroTik</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<span class="font-telemetry-code text-[11px] text-center text-outline">Resolusi Dinamis • CSS Mobile First Layout</span>
+</div>
+<!-- Card 2: Real-Time Campaign Telemetry -->
+<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-secondary text-[22px]">analytics</span>
+<h2 class="font-title-sm text-title-sm text-on-surface">Telemetri Performa</h2>
+</div>
+<span class="font-label-sm text-label-sm text-secondary bg-surface-container-low px-space-xs py-0.5 rounded">Live Telemetry</span>
+</div>
+<div class="flex flex-col gap-space-sm">
+<!-- Metric 1: Video Completion Rate -->
+<div class="flex flex-col gap-1 p-space-sm bg-surface-container-low rounded-lg">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">Video Completion Rate</span>
+<span class="font-telemetry-metric text-headline-md text-primary">96.2%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full w-[96.2%]"></div>
+</div>
+</div>
+<!-- Metric 2 & 3: Inline stats -->
+<div class="grid grid-cols-2 gap-space-sm">
+<div class="flex flex-col p-space-sm bg-surface-container-low rounded-lg">
+<span class="font-label-sm text-label-sm text-outline">Rata-rata Durasi</span>
+<span class="font-telemetry-metric text-title-sm text-on-surface mt-1">14.4 Detik</span>
+<span class="font-telemetry-code text-[11px] text-secondary">Dari total 15s</span>
+</div>
+<div class="flex flex-col p-space-sm bg-surface-container-low rounded-lg">
+<span class="font-label-sm text-label-sm text-outline">Sisa Kuota Tayang</span>
+<span class="font-telemetry-metric text-title-sm text-on-surface mt-1">25.500 Impr</span>
+<span class="font-telemetry-code text-[11px] text-outline">Est. 16 hari lagi</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 3: Version History & Audit Trail -->
+<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col gap-space-md">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-outline text-[20px]">history</span>
+<h2 class="font-title-sm text-title-sm text-on-surface">Log Riwayat Modifikasi</h2>
+</div>
+<span class="font-label-sm text-label-sm text-outline">Audit Trail</span>
+</div>
+<div class="flex flex-col gap-space-sm pt-space-xs">
+<div class="flex items-start gap-space-sm p-space-xs">
+<div class="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0"></div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface">Bandwidth Diubah ke 5 Mbps</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Dian Pratama menaikkan limit download dari 2 Mbps ke 5 Mbps.</span>
+<span class="font-telemetry-code text-telemetry-code text-outline mt-0.5">10 Juni 2025 • 14:20 WIB</span>
+</div>
+</div>
+<div class="flex items-start gap-space-sm p-space-xs">
+<div class="w-2 h-2 rounded-full bg-secondary mt-1.5 shrink-0"></div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface">Kampanye Dipublikasikan</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Siti Rahmawati meluncurkan iklan perdana ke 12 Router.</span>
+<span class="font-telemetry-code text-telemetry-code text-outline mt-0.5">1 Juni 2025 • 08:00 WIB</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+  // Device view toggler micro-interaction for Captive Portal Simulator
+  const btnDesktop = document.getElementById('btn-view-desktop');
+  const btnMobile = document.getElementById('btn-view-mobile');
+  const portalFrame = document.getElementById('portal-frame');
+  const saveBtn = document.getElementById('save-campaign-btn');
+
+  if (btnDesktop && btnMobile && portalFrame) {
+    btnDesktop.addEventListener('click', () => {
+      portalFrame.classList.remove('max-w-[310px]');
+      portalFrame.classList.add('max-w-[420px]');
+      btnDesktop.classList.add('bg-surface-container-lowest', 'text-primary', 'shadow-sm');
+      btnDesktop.classList.remove('text-on-surface-variant');
+      btnMobile.classList.remove('bg-surface-container-lowest', 'text-primary', 'shadow-sm');
+      btnMobile.classList.add('text-on-surface-variant');
+    });
+
+    btnMobile.addEventListener('click', () => {
+      portalFrame.classList.remove('max-w-[420px]');
+      portalFrame.classList.add('max-w-[310px]');
+      btnMobile.classList.add('bg-surface-container-lowest', 'text-primary', 'shadow-sm');
+      btnMobile.classList.remove('text-on-surface-variant');
+      btnDesktop.classList.remove('bg-surface-container-lowest', 'text-primary', 'shadow-sm');
+      btnDesktop.classList.add('text-on-surface-variant');
+    });
+  }
+
+  // Simulated Save & MikroTik Sync Feedback
+  if (saveBtn) {
+    saveBtn.addEventListener('click', () => {
+      const originalHtml = saveBtn.innerHTML;
+      saveBtn.innerHTML = `
+        <span class="material-symbols-outlined text-[18px] animate-spin">refresh</span>
+        <span>Mengirim ke 12 Router...</span>
+      `;
+      saveBtn.disabled = true;
+
+      setTimeout(() => {
+        saveBtn.innerHTML = `
+          <span class="material-symbols-outlined text-[18px]">check_circle</span>
+          <span>Tersinkronisasi!</span>
+        `;
+        setTimeout(() => {
+          saveBtn.innerHTML = originalHtml;
+          saveBtn.disabled = false;
+        }, 2200);
+      }, 1200);
+    });
+  }
+</script></main></div></body></html>

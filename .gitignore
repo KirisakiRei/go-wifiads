@@ -1,0 +1,36 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# SSH / server access notes
+ssh/
+
+# Local scratch: debug helpers, run scripts, old binaries
+/_local_scratch/
+
+# Runtime data
+/logs/
+/uploads/
+*.log
+
+# Build output
+/bin/
+*.exe
+
+# React admin build and dependencies
+/admin/node_modules/
+/admin/dist/
+/admin/.env.local
+
+
+# Test and coverage artefacts
+*.out
+coverage.html
+
+# Editor and OS noise
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

@@ -1,0 +1,115 @@
+{{define "admin_vouchers.html"}}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  {{template "head" .}}
+</head>
+<body>
+  <main class="shell">
+    {{template "admin_nav" .}}
+
+    <div class="card">
+      <div class="page-head">
+        <h1>Penerbitan Voucher</h1>
+        <p class="subtitle">Buat voucher uji manual. Password didekripsi aman dan hanya muncul sekali setelah dibuat.</p>
+      </div>
+
+      <form id="voucher-form" class="form-row">
+        <div>
+          <label for="note">Catatan / Keterangan</label>
+          <input id="note" name="note" type="text" placeholder="Contoh: Pengujian Teknisi Meja 1" maxlength="255">
+        </div>
+        <div>
+          <label for="ttl_seconds">Masa Berlaku (Detik)</label>
+          <input id="ttl_seconds" name="ttl_seconds" type="number" min="60" max="86400" placeholder="300 (5 menit)">
+        </div>
+        <div style="flex: 0 0 auto;">
+          <button type="submit" style="padding: 0.6rem 1.25rem; width: 100%;">+ Terbitkan Voucher</button>
+        </div>
+      </form>
+      <div id="voucher-notice" class="notice" role="status" aria-live="polite" hidden></div>
+      <div id="voucher-result" class="voucher-result" hidden>
+        <div class="voucher-result-head">
+          <strong>Voucher baru diterbitkan</strong>
+          <span class="muted">Password hanya tampil sekali — salin sekarang.</span>
+        </div>
+        <dl class="voucher-creds">
+          <div>
+            <dt>Username</dt>
+            <dd><span class="mono" id="voucher-username">—</span></dd>
+          </div>
+          <div>
+            <dt>Password</dt>
+            <dd><span class="mono" id="voucher-password">—</span></dd>
+          </div>
+        </dl>
+        <div class="voucher-result-actions">
+          <button type="button" class="secondary" id="voucher-copy">Salin Kredensial</button>
+        </div>
+        <div id="voucher-copy-notice" class="notice" role="status" aria-live="polite" hidden></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="page-head">
+        <h1 style="margin-bottom: 0.25rem;">Riwayat Inventaris Voucher</h1>
+        <p class="subtitle" style="margin-bottom: 0;">Daftar voucher yang diterbitkan via portal captive atau dibuat manual oleh admin.</p>
+      </div>
+
+      <form method="get" action="/admin/vouchers" class="filter-bar" role="search">
+        <div class="filter-field filter-search">
+          <label for="voucher-search">Cari username</label>
+          <input id="voucher-search" name="search" type="search" value="{{.SearchQuery}}" placeholder="cth: wf-xxxxxx" maxlength="100" autocomplete="off">
+        </div>
+        <div class="filter-field filter-status">
+          <label for="voucher-status">Status</label>
+          <select id="voucher-status" name="status">
+            <option value="">Semua status</option>
+            <option value="ISSUED" {{if eq .StatusQuery "ISSUED"}}selected{{end}}>ISSUED</option>
+            <option value="ACTIVE" {{if eq .StatusQuery "ACTIVE"}}selected{{end}}>ACTIVE</option>
+            <option value="USED" {{if eq .StatusQuery "USED"}}selected{{end}}>USED</option>
+            <option value="EXPIRED" {{if eq .StatusQuery "EXPIRED"}}selected{{end}}>EXPIRED</option>
+            <option value="REVOKED" {{if eq .StatusQuery "REVOKED"}}selected{{end}}>REVOKED</option>
+          </select>
+        </div>
+        <div class="filter-actions">
+          <button type="submit">Filter</button>
+          {{if or .SearchQuery .StatusQuery}}<a class="btn secondary" href="/admin/vouchers">Reset</a>{{end}}
+        </div>
+      </form>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Status</th>
+              <th>Waktu Dibuat</th>
+              <th>Kedaluwarsa</th>
+              <th>Timeout Sesi</th>
+              <th>Diterbitkan Oleh</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Vouchers}}
+            <tr>
+              <td><span class="mono">{{.Username}}</span></td>
+              <td>{{template "status_badge" .Status}}</td>
+              <td class="muted">{{ts .CreatedAt}}</td>
+              <td class="muted">{{ts .ExpiresAt}}</td>
+              <td class="muted">{{duration .SessionTimeoutSeconds}}</td>
+              <td>{{if .CreatedBy}}<span class="badge">{{.CreatedBy}}</span>{{else}}-{{end}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="6" style="text-align: center; padding: 2rem;" class="muted">Belum ada voucher yang terdaftar di database.</td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{template "pagination" .}}
+    </div>
+  </main>
+  <script src="/static/js/admin.js"></script>
+</body>
+</html>
+{{end}}

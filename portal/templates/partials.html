@@ -1,0 +1,42 @@
+{{define "head"}}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2563eb">
+<title>{{.Title}} - {{.AppName}}</title>
+<link rel="stylesheet" href="/static/css/app.css">
+{{end}}
+
+{{define "admin_nav"}}
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-dot" aria-hidden="true"></span>
+    {{.AppName}}
+  </div>
+  <nav class="nav">
+    <a href="/admin/overview" class="{{if eq .Active "overview"}}active{{end}}">Overview</a>
+    <a href="/admin/vouchers" class="{{if eq .Active "vouchers"}}active{{end}}">Voucher</a>
+    <a href="/admin/visitors" class="{{if eq .Active "visitors"}}active{{end}}">Pengguna Wi-Fi</a>
+    <a href="/admin/sessions" class="{{if eq .Active "sessions"}}active{{end}}">Sesi RADIUS</a>
+  </nav>
+  <button type="button" class="secondary" id="logout-button" style="padding: 0.4rem 0.85rem; font-size: 0.82rem;">Keluar</button>
+</header>
+{{end}}
+
+{{define "pagination"}}
+{{if gt .Meta.TotalPages 1}}
+<div class="pagination">
+  {{if gt .Meta.CurrentPage 1}}
+    <a href="?page={{sub .Meta.CurrentPage 1}}{{if .SearchQuery}}&search={{.SearchQuery}}{{end}}{{if .StatusQuery}}&status={{.StatusQuery}}{{end}}">← Sebelumnya</a>
+  {{end}}
+  <span class="current">Halaman {{.Meta.CurrentPage}} dari {{.Meta.TotalPages}}</span>
+  {{if lt .Meta.CurrentPage .Meta.TotalPages}}
+    <a href="?page={{add .Meta.CurrentPage 1}}{{if .SearchQuery}}&search={{.SearchQuery}}{{end}}{{if .StatusQuery}}&status={{.StatusQuery}}{{end}}">Berikutnya →</a>
+  {{end}}
+  <span class="muted" style="margin-left: auto;">Total {{.Meta.TotalItems}} data tercatat</span>
+</div>
+{{end}}
+{{end}}
+
+{{define "status_badge"}}
+<span class="badge badge-{{.}}">{{.}}</span>
+{{end}}

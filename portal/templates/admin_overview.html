@@ -1,0 +1,69 @@
+{{define "admin_overview.html"}}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  {{template "head" .}}
+</head>
+<body>
+  <main class="shell">
+    {{template "admin_nav" .}}
+
+    <div class="card">
+      <div class="page-head">
+        <h1>Ringkasan Operasional</h1>
+        <p class="subtitle">Metrik aktivitas jaringan dan status perangkat secara real-time dari RADIUS Accounting.</p>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-label">Perangkat Aktif</div>
+          <div class="stat-value" style="color: var(--primary);">{{.Overview.ActiveDevices}}</div>
+          <span class="stat-hint">Terkoneksi saat ini</span>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Menunggu Iklan</div>
+          <div class="stat-value" style="color: var(--warning);">{{.Overview.PendingDevices}}</div>
+          <span class="stat-hint">Sesi portal terbuka</span>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Sesi Accounting</div>
+          <div class="stat-value">{{.Overview.ActiveSessions}}</div>
+          <span class="stat-hint">Tercatat di RADIUS</span>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Total Inventaris</div>
+          <div class="stat-value">{{.Overview.TotalVouchers}}</div>
+          <span class="stat-hint">Akumulasi voucher</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="page-head">
+        <h2 style="margin-bottom: 0.25rem;">Distribusi Status Voucher</h2>
+        <p class="subtitle" style="margin-bottom: 0;">Pemantauan siklus hidup voucher sementara yang diterbitkan oleh sistem.</p>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-label">Siap Digunakan (Issued)</div>
+          <div class="stat-value">{{.Overview.IssuedVouchers}}</div>
+          <span class="stat-hint">Belum login ke Hotspot</span>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Sedang Dipakai (Active)</div>
+          <div class="stat-value" style="color: var(--success);">{{.Overview.ActiveVouchers}}</div>
+          <span class="stat-hint">Terautentikasi aktif</span>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Selesai / Terpakai (Used)</div>
+          <div class="stat-value">{{.Overview.UsedVouchers}}</div>
+          <span class="stat-hint">Sesi telah ditutup</span>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="/static/js/admin.js"></script>
+</body>
+</html>
+{{end}}

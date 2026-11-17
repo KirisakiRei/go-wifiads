@@ -1,0 +1,74 @@
+{{define "admin_visitors.html"}}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  {{template "head" .}}
+</head>
+<body>
+  <main class="shell">
+    {{template "admin_nav" .}}
+
+    <div class="card">
+      <div class="page-head">
+        <h1>Daftar Pengguna Wi-Fi</h1>
+        <p class="subtitle">Monitoring sesi perangkat pengunjung Hotspot berdasarkan sinkronisasi RADIUS Accounting.</p>
+      </div>
+
+      <form method="get" action="/admin/visitors" class="filter-bar" role="search">
+        <div class="filter-field filter-search">
+          <label for="visitor-search">Cari MAC / IP / username</label>
+          <input id="visitor-search" name="search" type="search" value="{{.SearchQuery}}" placeholder="cth: AA:BB / 10.0.0 / wf-xxxxxx" maxlength="100" autocomplete="off">
+        </div>
+        <div class="filter-field filter-status">
+          <label for="visitor-status">Status</label>
+          <select id="visitor-status" name="status">
+            <option value="">Semua status</option>
+            <option value="PENDING" {{if eq .StatusQuery "PENDING"}}selected{{end}}>PENDING</option>
+            <option value="CONNECTED" {{if eq .StatusQuery "CONNECTED"}}selected{{end}}>CONNECTED</option>
+            <option value="CLOSED" {{if eq .StatusQuery "CLOSED"}}selected{{end}}>CLOSED</option>
+            <option value="STALE" {{if eq .StatusQuery "STALE"}}selected{{end}}>STALE</option>
+          </select>
+        </div>
+        <div class="filter-actions">
+          <button type="submit">Filter</button>
+          {{if or .SearchQuery .StatusQuery}}<a class="btn secondary" href="/admin/visitors">Reset</a>{{end}}
+        </div>
+      </form>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>MAC Address</th>
+              <th>Alamat IP</th>
+              <th>Voucher Terkait</th>
+              <th>Status</th>
+              <th>Mulai Terhubung</th>
+              <th>Durasi Sesi</th>
+              <th>Update Terakhir</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Visitors}}
+            <tr>
+              <td><span class="mono">{{if .MAC}}{{.MAC}}{{else}}-{{end}}</span></td>
+              <td><span class="mono">{{if .IP}}{{.IP}}{{else}}-{{end}}</span></td>
+              <td><span class="mono">{{if .Username}}{{.Username}}{{else}}-{{end}}</span></td>
+              <td>{{template "status_badge" .Status}}</td>
+              <td class="muted">{{if .ConnectedAt}}{{ts .ConnectedAt}}{{else}}-{{end}}</td>
+              <td class="muted">{{duration .SessionTimeSeconds}}</td>
+              <td class="muted">{{if .LastAccountingAt}}{{ts .LastAccountingAt}}{{else}}-{{end}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="7" style="text-align: center; padding: 2rem;" class="muted">Belum ada perangkat pengunjung yang tercatat.</td></tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{template "pagination" .}}
+    </div>
+  </main>
+  <script src="/static/js/admin.js"></script>
+</body>
+</html>
+{{end}}
