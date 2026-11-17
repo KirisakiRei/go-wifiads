@@ -1,0 +1,90 @@
+# Wi-Fi Ads — production stack for a 1 GB VPS.
+# Nginx runs on the host (see nginx.conf) and proxies to wifiads-api on loopback.
+name: wifiads
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: wifiads-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      # Keep the footprint small enough to share a 1 GB host.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - max_connections=30
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - effective_cache_size=128MB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 256m
+    logging: &small-logs
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }
+
+  migrate:
+    image: wifiads-api:latest
+    container_name: wifiads-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    entrypoint: ["/app/migrate"]
+    restart: "no"
+    mem_limit: 128m
+    logging: *small-logs
+
+  api:
+    image: wifiads-api:latest
+    container_name: wifiads-api
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file: .env
+    # Loopback only: the public entry point is nginx on the host.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 20s
+    mem_limit: 192m
+    logging: *small-logs
+
+  radius:
+    image: wifiads-api:latest
+    container_name: wifiads-radius
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file: .env
+    entrypoint: ["/app/radius"]
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    mem_limit: 128m
+    logging: *small-logs
+
+volumes:
+  pgdata: {}
