@@ -1,0 +1,2 @@
+# Keep shell scripts LF on every platform: CRLF breaks bash on Linux.
+*.sh text eol=lf
