@@ -3,8 +3,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Ganti 192.168.88.254 dengan IP laptop server kamu -->
-    <meta http-equiv="refresh" content="0; url=http://192.168.88.254:8080/portal?mac=$(mac)&ip=$(ip)&link-login-only=$(link-login-only-esc)&link-login=$(link-login-esc)&link-orig=$(link-orig-esc)&chap-id=$(chap-id)&chap-challenge=$(chap-challenge)">
+    <!--
+      Hotspot login redirector served from the router (HTML Directory: hotspot).
+      Point PORTAL_URL at the deployed portal. Nothing else needs editing.
+
+      CHAP parameters are intentionally omitted: the hotspot server profile runs
+      HTTP PAP only, and the portal verifies credentials with PAP.
+    -->
+    <meta http-equiv="refresh" content="0; url=https://wifiads.smartscales.web.id/portal?mac=$(mac)&ip=$(ip)&nasid=WiFiAds-RB750&link-login-only=$(link-login-only-esc)&link-login=$(link-login-esc)&link-orig=$(link-orig-esc)">
     <title>Mengarahkan ke Portal Wi-Fi...</title>
     <style>
         body {
@@ -51,7 +57,7 @@
         <p style="font-size: 14px; color: #666; margin-bottom: 16px;">
             Jika tidak berpindah otomatis dalam beberapa detik, silakan klik tombol di bawah:
         </p>
-        <a href="http://192.168.88.254:8080/portal?mac=$(mac)&ip=$(ip)&link-login-only=$(link-login-only-esc)&link-login=$(link-login-esc)&link-orig=$(link-orig-esc)&chap-id=$(chap-id)&chap-challenge=$(chap-challenge)" style="display: inline-block; background: #0066cc; color: white; padding: 10px 20px; border-radius: 6px;">
+        <a href="https://wifiads.smartscales.web.id/portal?mac=$(mac)&ip=$(ip)&nasid=WiFiAds-RB750&link-login-only=$(link-login-only-esc)&link-login=$(link-login-esc)&link-orig=$(link-orig-esc)" style="display: inline-block; background: #0066cc; color: white; padding: 10px 20px; border-radius: 6px;">
             Buka Halaman Login
         </a>
     </div>
