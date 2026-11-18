@@ -19,23 +19,26 @@ type CreatePortalSessionRequest struct {
 	LinkOrig      string `json:"link_orig" binding:"omitempty,max=512"`
 	ChapID        string `json:"chap_id" binding:"omitempty,max=16"`
 	ChapChallenge string `json:"chap_challenge" binding:"omitempty,max=256"`
-	NASIdentifier string `json:"nas_identifier" binding:"omitempty,max=128"`
-	RouterID      string `json:"router_id" binding:"omitempty,uuid"`
+	NASIdentifier   string `json:"nas_identifier" binding:"omitempty,max=128"`
+	RouterID        string `json:"router_id" binding:"omitempty,uuid"`
+	AdvertisementID string `json:"advertisement_id" binding:"omitempty,uuid"`
 }
 
 // PortalSessionResponse is returned right after the session is created. The
 // countdown starts at AdStartedAt and the button may be used at
 // ConnectAvailableAt; the backend re-checks both values on Connect.
 type PortalSessionResponse struct {
-	SessionToken       string    `json:"session_token"`
-	Status             string    `json:"status"`
-	AdStartedAt        time.Time `json:"ad_started_at"`
-	AdDurationSeconds  int       `json:"ad_duration_seconds"`
-	ConnectAvailableAt time.Time `json:"connect_available_at"`
-	ExpiresAt          time.Time `json:"expires_at"`
-	SiteName           string    `json:"site_name"`
-	RouterName         string    `json:"router_name"`
-	AuthMode           string    `json:"auth_mode"`
+	SessionToken       string           `json:"session_token"`
+	Status             string           `json:"status"`
+	AdStartedAt        time.Time        `json:"ad_started_at"`
+	AdDurationSeconds  int              `json:"ad_duration_seconds"`
+	ConnectAvailableAt time.Time        `json:"connect_available_at"`
+	ExpiresAt          time.Time        `json:"expires_at"`
+	SiteName           string           `json:"site_name"`
+	RouterName         string           `json:"router_name"`
+	AuthMode           string           `json:"auth_mode"`
+	AutoConnect        bool             `json:"auto_connect,omitempty"`
+	ConnectData        *ConnectResponse `json:"connect_data,omitempty"`
 }
 
 // PortalSessionStatusResponse reports the current session state.
@@ -63,6 +66,8 @@ type ConnectResponse struct {
 	VoucherExpiresAt      time.Time `json:"voucher_expires_at"`
 	BandwidthUpKbps       int       `json:"bandwidth_up_kbps"`
 	BandwidthDownKbps     int       `json:"bandwidth_down_kbps"`
+	PromoURL              string    `json:"promo_url,omitempty"`
+	PromoTitle            string    `json:"promo_title,omitempty"`
 }
 
 // SubmitSurveyRequest carries optional contact info from the survey page.

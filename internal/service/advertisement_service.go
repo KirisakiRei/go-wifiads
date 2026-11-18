@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"wifiads/internal/dto"
 	"wifiads/internal/model"
 	"wifiads/internal/repository"
+	"wifiads/pkg/apperror"
 )
 
 type advertisementService struct {
@@ -54,6 +56,27 @@ func (s *advertisementService) Create(ctx context.Context, req dto.CreateAdverti
 		mediaType = "image"
 	}
 
+	sortOrder := req.SortOrder
+	existingAds, _ := s.ads.List(ctx)
+	if sortOrder <= 0 {
+		maxOrder := 0
+		for _, item := range existingAds {
+			if item.SortOrder > maxOrder {
+				maxOrder = item.SortOrder
+			}
+		}
+		sortOrder = maxOrder + 1
+	} else {
+		for _, item := range existingAds {
+			if item.SortOrder == sortOrder {
+				return nil, apperror.New(
+					apperror.ErrAlreadyExists,
+					fmt.Sprintf("Prioritas #%d sudah digunakan oleh iklan %q. Silakan pilih nomor prioritas lain.", sortOrder, item.Title),
+				)
+			}
+		}
+	}
+
 	ad := &model.Advertisement{
 		Base: model.Base{
 			ID:        uuid.NewString(),
@@ -66,7 +89,7 @@ func (s *advertisementService) Create(ctx context.Context, req dto.CreateAdverti
 		MediaType:       mediaType,
 		LayoutMode:      layoutMode,
 		DurationSeconds: req.DurationSeconds,
-		SortOrder:       req.SortOrder,
+		SortOrder:       sortOrder,
 		IsActive:        req.IsActive,
 	}
 
@@ -84,6 +107,19 @@ func (s *advertisementService) Update(ctx context.Context, id string, req dto.Up
 		return nil, err
 	}
 
+	if req.SortOrder > 0 {
+		if existingAds, listErr := s.ads.List(ctx); listErr == nil {
+			for _, item := range existingAds {
+				if item.ID != id && item.SortOrder == req.SortOrder {
+					return nil, apperror.New(
+						apperror.ErrAlreadyExists,
+						fmt.Sprintf("Prioritas #%d sudah digunakan oleh iklan %q. Silakan pilih nomor prioritas lain.", req.SortOrder, item.Title),
+					)
+				}
+			}
+		}
+	}
+
 	ad.Title = strings.TrimSpace(req.Title)
 	ad.Body = strings.TrimSpace(req.Body)
 	ad.ImageURL = strings.TrimSpace(req.ImageURL)
@@ -96,7 +132,9 @@ func (s *advertisementService) Update(ctx context.Context, id string, req dto.Up
 	if req.DurationSeconds >= 0 {
 		ad.DurationSeconds = req.DurationSeconds
 	}
-	ad.SortOrder = req.SortOrder
+	if req.SortOrder > 0 {
+		ad.SortOrder = req.SortOrder
+	}
 	ad.IsActive = req.IsActive
 	ad.UpdatedAt = time.Now().UTC()
 

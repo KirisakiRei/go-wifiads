@@ -38,7 +38,7 @@ import type { UpdateRouterVoucherConfigInput } from '@/features/routers/types'
 import { useRouters } from '@/features/routers/use-routers'
 
 function formatBw(kbps: number): string {
-  if (!kbps || kbps <= 0) return 'Tidak Terbatas'
+  if (!kbps || kbps <= 0) return 'Tanpa Batas'
   if (kbps >= 1024) {
     const mb = kbps / 1024
     return `${mb % 1 === 0 ? mb : mb.toFixed(1)} Mbps`
@@ -46,47 +46,38 @@ function formatBw(kbps: number): string {
   return `${kbps} Kbps`
 }
 
-function liveDescBw(kbps: number): string {
-  if (!kbps || kbps <= 0) return 'Tidak ada batasan kecepatan'
-  if (kbps >= 1024) {
-    const mb = (kbps / 1024).toFixed(1).replace('.0', '')
-    return `≈ ${mb} Mbps (${kbps} Kbps)`
-  }
-  return `${kbps} Kbps`
-}
-
 function liveDescDuration(sec: number): string {
-  if (!sec || sec <= 0) return 'Tidak terbatas'
+  if (!sec || sec <= 0) return 'Tanpa Batas'
   const hours = Math.floor(sec / 3600)
   const mins = Math.floor((sec % 3600) / 60)
   const parts: string[] = []
   if (hours > 0) parts.push(`${hours} Jam`)
   if (mins > 0) parts.push(`${mins} Menit`)
   if (parts.length === 0) parts.push(`${sec} Detik`)
-  return `≈ ${parts.join(' ')} (${sec} detik)`
+  return parts.join(' ')
 }
 
 const BW_DOWN_PRESETS = [
   { label: '512 Kbps', val: 512 },
-  { label: '1 Mbps (1024)', val: 1024 },
-  { label: '2 Mbps (2048)', val: 2048 },
-  { label: '5 Mbps (5120)', val: 5120 },
-  { label: '10 Mbps (10240)', val: 10240 },
+  { label: '1 Mbps', val: 1024 },
+  { label: '2 Mbps', val: 2048 },
+  { label: '5 Mbps', val: 5120 },
+  { label: '10 Mbps', val: 10240 },
 ]
 
 const BW_UP_PRESETS = [
   { label: '256 Kbps', val: 256 },
   { label: '512 Kbps', val: 512 },
-  { label: '1 Mbps (1024)', val: 1024 },
-  { label: '2 Mbps (2048)', val: 2048 },
+  { label: '1 Mbps', val: 1024 },
+  { label: '2 Mbps', val: 2048 },
 ]
 
 const DURATION_PRESETS = [
-  { label: '30 Menit (1800)', val: 1800 },
-  { label: '1 Jam (3600)', val: 3600 },
-  { label: '2 Jam (7200)', val: 7200 },
-  { label: '6 Jam (21600)', val: 21600 },
-  { label: '24 Jam (86400)', val: 86400 },
+  { label: '30 Menit', val: 1800 },
+  { label: '1 Jam', val: 3600 },
+  { label: '2 Jam', val: 7200 },
+  { label: '6 Jam', val: 21600 },
+  { label: '24 Jam', val: 86400 },
 ]
 
 interface ProfileEditState {
@@ -162,10 +153,10 @@ function ProfileInlineEditor({
           </div>
           <div>
             <h4 style={{ fontSize: '15px', fontWeight: 700, color: '#0b1c30', margin: 0 }}>
-              Edit Master Profil: {profile.display_name}
+              Edit Paket: {profile.display_name}
             </h4>
             <span style={{ fontSize: '12px', color: '#64748b' }}>
-              Identifikasi Paket: <code>{profile.name}</code> • Kuota Kecepatan Jaringan
+              Kode: <code>{profile.name}</code>
             </span>
           </div>
         </div>
@@ -173,54 +164,47 @@ function ProfileInlineEditor({
 
       <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '1.5rem' }}>
         <div className="form-grid-2col">
-          {/* LEFT COLUMN: Metadata */}
+          {/* LEFT COLUMN */}
           <div style={{ display: 'grid', gap: '1.25rem', alignContent: 'start' }}>
             <div className="form-field">
-              <label>Nama Tampilan Profil</label>
+              <label>Nama Paket</label>
               <input
                 value={form.displayName}
                 onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-                placeholder="Misal: Paket Cepat 5 Mbps"
+                placeholder="Contoh: Paket Cepat 5 Mbps"
                 required
               />
-              <span className="helper-text">
-                Nama paket yang mudah dikenali oleh pengelola.
-              </span>
             </div>
 
             <div className="form-field">
-              <label>Keterangan Paket</label>
+              <label>Keterangan</label>
               <input
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Misal: Kecepatan standar untuk browsing umum"
+                placeholder="Contoh: Kecepatan standar untuk pengguna umum"
               />
-              <span className="helper-text">
-                Catatan peruntukan profil agar pengelola tidak salah alokasi.
-              </span>
             </div>
 
             <div className="form-field">
-              <label className="no-between">Status Profil</label>
+              <label className="no-between">Status Paket</label>
               <PolicyCard
-                title="Aktifkan Profil Ini"
-                description="Profil yang aktif dapat dipilih pada alokasi metode akses router."
+                title="Aktifkan Paket Ini"
+                description="Paket yang aktif dapat dipilih pada pengaturan router."
                 checked={form.isActive}
                 onChange={(checked) => setForm({ ...form, isActive: checked })}
               />
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Bandwidth & Duration Controls */}
+          {/* RIGHT COLUMN */}
           <div style={{ display: 'grid', gap: '1.25rem', alignContent: 'start' }}>
             <PresetInput
-              label="Batas Kecepatan Unduh / Download (Kbps)"
+              label="Batas Kecepatan Unduh (Kbps)"
               icon={Download}
               iconColor="#065f46"
               value={form.downKbps}
               onChange={(downKbps) => setForm({ ...form, downKbps })}
-              badgeText={liveDescBw(form.downKbps)}
-              helperText="1024 Kbps = 1 Mbps, 5120 Kbps = 5 Mbps."
+              badgeText={formatBw(form.downKbps)}
               min={128}
               max={102400}
               presets={BW_DOWN_PRESETS}
@@ -228,13 +212,12 @@ function ProfileInlineEditor({
             />
 
             <PresetInput
-              label="Batas Kecepatan Unggah / Upload (Kbps)"
+              label="Batas Kecepatan Unggah (Kbps)"
               icon={Upload}
               iconColor="#0369a1"
               value={form.upKbps}
               onChange={(upKbps) => setForm({ ...form, upKbps })}
-              badgeText={liveDescBw(form.upKbps)}
-              helperText="512 Kbps = 0.5 Mbps, 1024 Kbps = 1 Mbps."
+              badgeText={formatBw(form.upKbps)}
               min={128}
               max={51200}
               presets={BW_UP_PRESETS}
@@ -242,12 +225,11 @@ function ProfileInlineEditor({
             />
 
             <PresetInput
-              label="Batas Durasi Sesi Pengguna (Detik)"
+              label="Durasi Sesi (Detik)"
               icon={Timer}
               value={form.timeoutSeconds}
               onChange={(timeoutSeconds) => setForm({ ...form, timeoutSeconds })}
               badgeText={liveDescDuration(form.timeoutSeconds)}
-              helperText="Waktu akses internet yang diberikan kepada pengguna."
               min={60}
               max={604800}
               presets={DURATION_PRESETS}
@@ -268,7 +250,7 @@ function ProfileInlineEditor({
         >
           <button type="submit" className="btn btn-primary" disabled={isSaving}>
             <Save size={16} />
-            {isSaving ? 'Menyimpan Perubahan...' : 'Simpan Perubahan'}
+            {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
           </button>
           <button type="button" className="btn btn-secondary" onClick={onToggle}>
             Batal
@@ -279,17 +261,12 @@ function ProfileInlineEditor({
   )
 }
 
-/**
- * RouterMethodAssignmentCard
- * Section khusus untuk alokasi metode akses hotspot per router MikroTik
- */
 function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }) {
   const { data: routers = [], isLoading: isLoadingRouters } = useRouters()
   const [selectedRouterId, setSelectedRouterId] = useState<string>('')
   const [skipProfileId, setSkipProfileId] = useState<string>('')
   const [surveyProfileId, setSurveyProfileId] = useState<string>('')
 
-  // Set default selected router
   useEffect(() => {
     if (routers.length > 0 && !selectedRouterId) {
       setSelectedRouterId(routers[0].id)
@@ -301,10 +278,8 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
     [routers, selectedRouterId]
   )
 
-  // Sync profile assignment from selected router
   useEffect(() => {
     if (currentRouter) {
-      // 1. Skip survey profile (default_profile_id)
       if (currentRouter.default_profile_id) {
         setSkipProfileId(currentRouter.default_profile_id)
       } else if (profiles.length > 0) {
@@ -312,7 +287,6 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
         if (def) setSkipProfileId(def.id)
       }
 
-      // 2. Completed survey profile (survey_profile_id)
       if (currentRouter.survey_profile_id) {
         setSurveyProfileId(currentRouter.survey_profile_id)
       } else if (profiles.length > 0) {
@@ -338,13 +312,11 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
     mutationFn: (input: UpdateRouterVoucherConfigInput) =>
       routersApi.updateVoucherConfig(selectedRouterId, input),
     onSuccess: () => {
-      toast.success('Kebijakan metode akses router berhasil disimpan!', {
-        description: `Profil berhasil dialokasikan untuk ${currentRouter?.name || 'Router'}.`,
-      })
+      toast.success('Pengaturan paket router berhasil disimpan')
       queryClient.invalidateQueries({ queryKey: ['routers'] })
     },
     onError: (err: Error) => {
-      toast.error('Gagal menyimpan kebijakan metode akses', {
+      toast.error('Gagal menyimpan pengaturan paket', {
         description: err.message,
       })
     },
@@ -353,7 +325,7 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
   const handleSavePolicy = (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedRouterId) {
-      toast.error('Pilih router MikroTik terlebih dahulu!')
+      toast.error('Pilih router terlebih dahulu')
       return
     }
     if (!currentRouter) return
@@ -372,14 +344,13 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
   if (isLoadingRouters) {
     return (
       <div className="stitch-card-container" style={{ padding: '2rem', textAlign: 'center', marginBottom: '1.75rem' }}>
-        <span style={{ fontSize: '13px', color: '#64748b' }}>Memuat konfigurasi router...</span>
+        <span style={{ fontSize: '13px', color: '#64748b' }}>Memuat pengaturan router...</span>
       </div>
     )
   }
 
   return (
     <div className="stitch-card-container" style={{ marginBottom: '2rem' }}>
-      {/* Header Toolbar */}
       <div
         className="table-toolbar"
         style={{
@@ -406,37 +377,17 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
           </div>
           <div>
             <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#0b1c30' }}>
-              Alokasi Metode Akses Hotspot (Per Router MikroTik)
+              Pengaturan Paket per Router
             </h3>
             <p style={{ fontSize: '12px', color: '#64748b', margin: '0.15rem 0 0 0' }}>
-              Pilih profil master yang otomatis diberikan saat pengguna melewati survei atau mengisi survei data kontak.
+              Tentukan paket internet yang diberikan saat pengunjung melewati form kontak atau mengisi form kontak.
             </p>
           </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.35rem 0.75rem',
-              borderRadius: '9999px',
-              background: '#eff6ff',
-              color: '#1d4ed8',
-              border: '1px solid #bfdbfe',
-              fontSize: '11px',
-              fontWeight: 700,
-            }}
-          >
-            <Sparkles size={13} color="#1d4ed8" />
-            Distribusi Otomatis Aktif
-          </span>
         </div>
       </div>
 
       <form onSubmit={handleSavePolicy} style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', background: '#fafcff' }}>
-        {/* Router Target Selector */}
+        {/* Router Selector */}
         <div style={{ background: '#ffffff', padding: '1.15rem 1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.65rem' }}>
             <label
@@ -444,8 +395,6 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
               style={{
                 fontSize: '12px',
                 fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
                 color: '#334155',
                 display: 'flex',
                 alignItems: 'center',
@@ -454,36 +403,13 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
               }}
             >
               <Router size={16} color="#0037b0" />
-              Target Router MikroTik
+              Pilih Router
             </label>
-
-            {currentRouter && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '12px' }}>
-                <span style={{ color: '#64748b' }}>
-                  Lokasi: <strong style={{ color: '#0f172a' }}>{currentRouter.name}</strong>
-                </span>
-                <span style={{ color: '#64748b' }}>
-                  IP: <strong style={{ color: '#0f172a', fontFamily: 'monospace' }}>{currentRouter.ip_address || '10.10.0.1'}</strong>
-                </span>
-                <span
-                  style={{
-                    padding: '0.15rem 0.5rem',
-                    borderRadius: '9999px',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    background: currentRouter.status === 'ACTIVE' ? '#ecfdf5' : '#fef2f2',
-                    color: currentRouter.status === 'ACTIVE' ? '#065f46' : '#991b1b',
-                  }}
-                >
-                  {currentRouter.status === 'ACTIVE' ? 'Aktif' : 'Nonaktif'}
-                </span>
-              </div>
-            )}
           </div>
 
           {routers.length === 0 ? (
             <div style={{ padding: '0.85rem 1rem', borderRadius: '8px', background: '#fff1f2', border: '1px solid #fecdd3', color: '#9f1239', fontSize: '12px' }}>
-              Belum ada router MikroTik yang terdaftar di database.
+              Belum ada router yang terdaftar.
             </div>
           ) : (
             <select
@@ -505,14 +431,14 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
             >
               {routers.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.name} — NAS: {r.nas_identifier} (IP: {r.ip_address || '10.10.0.1'})
+                  {r.name} ({r.nas_identifier})
                 </option>
               ))}
             </select>
           )}
         </div>
 
-        {/* 2-Method Grid Allocation Cards */}
+        {/* 2-Method Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
           {/* METHOD 1: SKIP SURVEY */}
           <div
@@ -543,17 +469,17 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
               </div>
               <div>
                 <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#0b1c30' }}>
-                  Metode: Lewati (Skip) Survey
+                  Tanpa Isi Kontak
                 </h4>
                 <span style={{ fontSize: '11px', color: '#64748b' }}>
-                  Akses langsung tanpa mengisi form kontak
+                  Saat pengunjung memilih langsung terhubung
                 </span>
               </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155' }}>
-                Pilih Master Profil Internet:
+                Paket Internet:
               </label>
               <select
                 value={skipProfileId}
@@ -570,7 +496,7 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
               >
                 {activeProfiles.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.display_name} (↓ {formatBw(p.bandwidth_down_kbps)} / ↑ {formatBw(p.bandwidth_up_kbps)} — {formatDuration(p.session_timeout_seconds)})
+                    {p.display_name} — ↓ {formatBw(p.bandwidth_down_kbps)} / ↑ {formatBw(p.bandwidth_up_kbps)} • {liveDescDuration(p.session_timeout_seconds)}
                   </option>
                 ))}
               </select>
@@ -590,7 +516,7 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
                 }}
               >
                 <span>Kecepatan: <strong>↓ {formatBw(selectedSkipProfile.bandwidth_down_kbps)}</strong></span>
-                <span>Durasi: <strong>{formatDuration(selectedSkipProfile.session_timeout_seconds)}</strong></span>
+                <span>Durasi: <strong>{liveDescDuration(selectedSkipProfile.session_timeout_seconds)}</strong></span>
               </div>
             )}
           </div>
@@ -625,17 +551,17 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
               </div>
               <div>
                 <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#1e3a8a' }}>
-                  Metode: Selesai Mengisi Survey
+                  Mengisi Kontak
                 </h4>
                 <span style={{ fontSize: '11px', color: '#1d4ed8' }}>
-                  Reward akses lebih cepat untuk pengunjung yang mengisi kontak (Leads)
+                  Saat pengunjung mengisi email atau nomor WhatsApp
                 </span>
               </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               <label style={{ fontSize: '12px', fontWeight: 600, color: '#334155' }}>
-                Pilih Master Profil Internet:
+                Paket Internet:
               </label>
               <select
                 value={surveyProfileId}
@@ -652,7 +578,7 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
               >
                 {activeProfiles.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.display_name} (↓ {formatBw(p.bandwidth_down_kbps)} / ↑ {formatBw(p.bandwidth_up_kbps)} — {formatDuration(p.session_timeout_seconds)})
+                    {p.display_name} — ↓ {formatBw(p.bandwidth_down_kbps)} / ↑ {formatBw(p.bandwidth_up_kbps)} • {liveDescDuration(p.session_timeout_seconds)}
                   </option>
                 ))}
               </select>
@@ -672,7 +598,7 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
                 }}
               >
                 <span>Kecepatan: <strong>↓ {formatBw(selectedSurveyProfile.bandwidth_down_kbps)}</strong></span>
-                <span>Durasi: <strong>{formatDuration(selectedSurveyProfile.session_timeout_seconds)}</strong></span>
+                <span>Durasi: <strong>{liveDescDuration(selectedSurveyProfile.session_timeout_seconds)}</strong></span>
               </div>
             )}
           </div>
@@ -691,7 +617,7 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '12px', color: '#64748b' }}>
             <CheckCircle2 size={16} color="#10b981" />
-            <span>Router akan menerapkan profil secara otomatis sesuai tombol aksi yang ditekan pengunjung di layar captive portal.</span>
+            <span>Paket otomatis diterapkan sesuai pilihan pengunjung di halaman portal.</span>
           </div>
 
           <button
@@ -701,7 +627,7 @@ function RouterMethodAssignmentCard({ profiles }: { profiles: ConnectProfile[] }
             style={{ padding: '0.75rem 1.5rem', fontWeight: 700 }}
           >
             <Save size={16} />
-            {updateMutation.isPending ? 'Menyimpan Kebijakan...' : 'Terapkan Kebijakan ke Router Ini'}
+            {updateMutation.isPending ? 'Menyimpan...' : 'Simpan Pengaturan Router'}
           </button>
         </div>
       </form>
@@ -714,7 +640,6 @@ export function ProfilesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
 
-  // Create form state (pure QoS template)
   const [createName, setCreateName] = useState('')
   const [createDisplayName, setCreateDisplayName] = useState('')
   const [createDesc, setCreateDesc] = useState('')
@@ -725,7 +650,7 @@ export function ProfilesPage() {
   const createMutation = useMutation({
     mutationFn: profilesApi.create,
     onSuccess: () => {
-      toast.success('Master profil berhasil ditambahkan')
+      toast.success('Paket baru berhasil ditambahkan')
       queryClient.invalidateQueries({ queryKey: profilesQueryKey })
       setShowCreate(false)
       setCreateName('')
@@ -733,24 +658,24 @@ export function ProfilesPage() {
       setCreateDesc('')
     },
     onError: (err: Error) => {
-      toast.error(err.message || 'Gagal menambahkan profil')
+      toast.error(err.message || 'Gagal menambahkan paket')
     },
   })
 
   const updateMutation = useMutation({
     mutationFn: profilesApi.update,
     onSuccess: () => {
-      toast.success('Perubahan profil berhasil disimpan')
+      toast.success('Perubahan paket berhasil disimpan')
       queryClient.invalidateQueries({ queryKey: profilesQueryKey })
       setExpandedId(null)
     },
     onError: (err: Error) => {
-      toast.error(err.message || 'Gagal memperbarui profil')
+      toast.error(err.message || 'Gagal memperbarui paket')
     },
   })
 
   if (isPending) return <LoadingState />
-  if (error || !profiles) return <ErrorState message="Tidak dapat menampilkan data profil paket saat ini." />
+  if (error || !profiles) return <ErrorState message="Gagal memuat daftar paket internet." />
 
   const handleToggle = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))
@@ -775,7 +700,7 @@ export function ProfilesPage() {
   return (
     <div>
       <WavyHeader
-        title="Manajemen Profil &amp; Kebijakan Akses"
+        title="Profil Paket Internet"
         actions={
           <button
             type="button"
@@ -783,25 +708,23 @@ export function ProfilesPage() {
             onClick={() => setShowCreate(!showCreate)}
           >
             {showCreate ? <X size={18} /> : <Plus size={18} />}
-            {showCreate ? 'Tutup Form' : 'Tambah Master Profil Baru'}
+            {showCreate ? 'Tutup Form' : 'Tambah Paket Baru'}
           </button>
         }
       />
 
       <div className="stitch-page-stage">
-        {/* Telemetry Cards from Stitch */}
+        {/* KPI Cards */}
         <KpiGrid columns={3}>
           <KpiCard
-            label="Master Profil Terdaftar"
+            label="Total Paket"
             value={profiles.length}
             icon={Layers}
-            trend={{ label: 'Template Aktif', variant: 'success' }}
-            footerLeft="Standar Kecepatan Jaringan"
-            footerRight="Template Bandwidth"
+            subtext="Paket internet tersedia"
           />
 
           <KpiCard
-            label="Rata-rata Durasi Sesi"
+            label="Rata-rata Durasi"
             value={
               profiles.length > 0
                 ? formatDuration(
@@ -810,29 +733,25 @@ export function ProfilesPage() {
                         profiles.length
                     )
                   )
-                : '0s'
+                : '0m'
             }
             icon={Timer}
             iconBoxVariant="secondary"
-            trend={{ label: 'Durasi Sesi' }}
-            footerLeft="Durasi voucher standar"
-            footerRight="Koneksi Otomatis"
+            subtext="Batas waktu per sesi"
           />
 
           <KpiCard
-            label="Alokasi Bandwidth Maks"
+            label="Kecepatan Tertinggi"
             value={formatBw(maxDown)}
             icon={Gauge}
-            trend={{ label: 'Kecepatan Tertinggi', variant: 'success' }}
-            footerLeft="Alokasi Kecepatan Utama"
-            footerRight="Pengaturan Bandwidth"
+            subtext="Batas unduh maksimal"
           />
         </KpiGrid>
 
         {/* SECTION 1: Router Method Assignment Card */}
         <RouterMethodAssignmentCard profiles={profiles} />
 
-        {/* Modal Popup: Tambah Master Profil Baru */}
+        {/* Modal Popup: Tambah Paket Baru */}
         {showCreate && (
           <div
             style={{
@@ -880,9 +799,9 @@ export function ProfilesPage() {
                     <PlusCircle size={20} />
                   </div>
                   <div>
-                    <h3 style={{ margin: 0, fontSize: '16px', color: '#0b1c30' }}>Tambah Master Profil Baru</h3>
+                    <h3 style={{ margin: 0, fontSize: '16px', color: '#0b1c30' }}>Tambah Paket Baru</h3>
                     <span style={{ fontSize: '12px', color: '#64748b' }}>
-                      Konfigurasi batas bandwidth dan durasi sesi internet hotspot
+                      Atur batas kecepatan dan durasi sesi internet
                     </span>
                   </div>
                 </div>
@@ -892,7 +811,6 @@ export function ProfilesPage() {
                   className="btn btn-secondary"
                   style={{ padding: '0.4rem', borderRadius: '8px' }}
                   onClick={() => setShowCreate(false)}
-                  title="Tutup Modal"
                 >
                   <X size={18} />
                 </button>
@@ -900,42 +818,38 @@ export function ProfilesPage() {
 
               <form onSubmit={handleCreateSubmit} style={{ padding: '1.75rem', display: 'grid', gap: '1.5rem', background: '#ffffff' }}>
                 <div className="form-grid-2col">
-                  {/* LEFT COLUMN: Identitas Profil */}
                   <div style={{ display: 'grid', gap: '1.25rem', alignContent: 'start' }}>
                     <div className="form-field">
-                      <label>Kode Unik Sistem</label>
+                      <label>Kode Paket</label>
                       <input
                         value={createName}
                         onChange={(e) => setCreateName(e.target.value)}
-                        placeholder="Misal: paket-10mbps"
+                        placeholder="Contoh: paket-10mbps"
                         required
                       />
-                      <span className="helper-text">Identifikasi sistem (huruf kecil, tanpa spasi).</span>
+                      <span className="helper-text">Gunakan huruf kecil tanpa spasi.</span>
                     </div>
 
                     <div className="form-field">
-                      <label>Nama Tampilan Paket</label>
+                      <label>Nama Paket</label>
                       <input
                         value={createDisplayName}
                         onChange={(e) => setCreateDisplayName(e.target.value)}
-                        placeholder="Misal: Paket Cepat 10 Mbps"
+                        placeholder="Contoh: Paket Cepat 10 Mbps"
                         required
                       />
-                      <span className="helper-text">Nama paket yang tampil pada daftar profil admin.</span>
                     </div>
 
                     <div className="form-field">
-                      <label>Keterangan / Catatan</label>
+                      <label>Keterangan</label>
                       <input
                         value={createDesc}
                         onChange={(e) => setCreateDesc(e.target.value)}
-                        placeholder="Misal: Kecepatan tinggi untuk survei lengkap"
+                        placeholder="Contoh: Kecepatan tinggi untuk pengisi kontak"
                       />
-                      <span className="helper-text">Catatan opsional untuk membedakan paket.</span>
                     </div>
                   </div>
 
-                  {/* RIGHT COLUMN: Bandwidth & Duration Controls */}
                   <div style={{ display: 'grid', gap: '1.25rem', alignContent: 'start' }}>
                     <PresetInput
                       label="Batas Kecepatan Unduh (Kbps)"
@@ -943,8 +857,7 @@ export function ProfilesPage() {
                       iconColor="#065f46"
                       value={createDown}
                       onChange={setCreateDown}
-                      badgeText={liveDescBw(createDown)}
-                      helperText="Kecepatan download yang dialokasikan ke perangkat pengguna."
+                      badgeText={formatBw(createDown)}
                       presets={BW_DOWN_PRESETS}
                       min={0}
                       max={100000}
@@ -956,21 +869,19 @@ export function ProfilesPage() {
                       iconColor="#0369a1"
                       value={createUp}
                       onChange={setCreateUp}
-                      badgeText={liveDescBw(createUp)}
-                      helperText="Kecepatan upload yang dialokasikan ke perangkat pengguna."
+                      badgeText={formatBw(createUp)}
                       presets={BW_UP_PRESETS}
                       min={0}
                       max={100000}
                     />
 
                     <PresetInput
-                      label="Durasi Sesi Internet (Detik)"
+                      label="Durasi Sesi (Detik)"
                       icon={Timer}
                       iconColor="#00668a"
                       value={createTimeout}
                       onChange={setCreateTimeout}
                       badgeText={liveDescDuration(createTimeout)}
-                      helperText="Waktu countdown sebelum sesi voucher diputus otomatis."
                       presets={DURATION_PRESETS}
                       min={60}
                       max={604800}
@@ -992,7 +903,7 @@ export function ProfilesPage() {
                     disabled={createMutation.isPending}
                   >
                     <Save size={16} />
-                    {createMutation.isPending ? 'Menyimpan...' : 'Simpan Master Profil'}
+                    {createMutation.isPending ? 'Menyimpan...' : 'Simpan Paket'}
                   </button>
                 </div>
               </form>
@@ -1000,20 +911,17 @@ export function ProfilesPage() {
           </div>
         )}
 
-        {/* SECTION 2: Master QoS Profiles Table */}
+        {/* SECTION 2: Profiles Table */}
         <div className="stitch-card-container">
           <div className="table-toolbar">
             <div className="table-toolbar-title">
               <Layers size={20} style={{ color: '#1d4ed8' }} />
               <div>
-                <h3 style={{ margin: 0, fontSize: '15px' }}>Daftar Master Profil Internet (QoS)</h3>
+                <h3 style={{ margin: 0, fontSize: '15px' }}>Daftar Paket Internet</h3>
                 <span style={{ fontSize: '12px', color: '#64748b' }}>
-                  Template kecepatan bandwidth dan durasi sesi yang siap dialokasikan ke router hotspot
+                  Pilihan paket kecepatan dan durasi yang dapat digunakan pada router
                 </span>
               </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <span className="status-pill active">{profiles.length} Profil Terdaftar</span>
             </div>
           </div>
 
@@ -1021,11 +929,10 @@ export function ProfilesPage() {
             <table className="stitch-table">
               <thead>
                 <tr>
-                  <th style={{ minWidth: '240px' }}>Kode &amp; Nama Paket</th>
-                  <th>Kecepatan Unduh</th>
-                  <th>Kecepatan Unggah</th>
-                  <th>Batas Waktu Sesi</th>
-                  <th>Deskripsi Paket</th>
+                  <th style={{ minWidth: '240px' }}>Nama Paket</th>
+                  <th>Batas Unduh</th>
+                  <th>Batas Unggah</th>
+                  <th>Durasi Sesi</th>
                   <th style={{ textAlign: 'center' }}>Status</th>
                   <th style={{ textAlign: 'right' }}>Aksi</th>
                 </tr>
@@ -1060,64 +967,47 @@ export function ProfilesPage() {
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <strong style={{ fontSize: '14px', color: '#0b1c30' }}>
+                                  {p.display_name}
+                                </strong>
                                 <code
                                   style={{
                                     fontSize: '11px',
-                                    fontWeight: 700,
-                                    background: '#e0e7ff',
-                                    color: '#3730a3',
+                                    fontWeight: 600,
+                                    background: '#f1f5f9',
+                                    color: '#475569',
                                     padding: '2px 6px',
                                     borderRadius: '4px',
                                   }}
                                 >
                                   {p.name}
                                 </code>
-                                <strong style={{ fontSize: '14px', color: '#0b1c30' }}>
-                                  {p.display_name}
-                                </strong>
                               </div>
-                              <small style={{ color: '#64748b', fontSize: '12px' }}>
-                                {p.description || 'Tidak ada deskripsi tambahan.'}
-                              </small>
+                              {p.description && (
+                                <small style={{ color: '#64748b', fontSize: '12px' }}>
+                                  {p.description}
+                                </small>
+                              )}
                             </div>
                           </div>
                         </td>
 
                         <td style={{ whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '14px', fontWeight: 700, color: '#065f46' }}>
-                              ↓ {formatBw(p.bandwidth_down_kbps)}
-                            </span>
-                            <span style={{ fontSize: '11px', color: '#747686' }}>
-                              {p.bandwidth_down_kbps} Kbps
-                            </span>
-                          </div>
+                          <span style={{ fontSize: '14px', fontWeight: 700, color: '#065f46' }}>
+                            ↓ {formatBw(p.bandwidth_down_kbps)}
+                          </span>
                         </td>
 
                         <td style={{ whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '14px', fontWeight: 700, color: '#0369a1' }}>
-                              ↑ {formatBw(p.bandwidth_up_kbps)}
-                            </span>
-                            <span style={{ fontSize: '11px', color: '#747686' }}>
-                              {p.bandwidth_up_kbps} Kbps
-                            </span>
-                          </div>
+                          <span style={{ fontSize: '14px', fontWeight: 700, color: '#0369a1' }}>
+                            ↑ {formatBw(p.bandwidth_up_kbps)}
+                          </span>
                         </td>
 
                         <td style={{ whiteSpace: 'nowrap' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '14px', fontWeight: 700, color: '#0b1c30' }}>
-                              {formatDuration(p.session_timeout_seconds)}
-                            </span>
-                            <span style={{ fontSize: '11px', color: '#747686' }}>
-                              {p.session_timeout_seconds} dtk
-                            </span>
-                          </div>
-                        </td>
-
-                        <td style={{ fontSize: '13px', color: '#434655' }}>
-                          {p.description || '—'}
+                          <span style={{ fontSize: '14px', fontWeight: 700, color: '#0b1c30' }}>
+                            {liveDescDuration(p.session_timeout_seconds)}
+                          </span>
                         </td>
 
                         <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
@@ -1149,7 +1039,7 @@ export function ProfilesPage() {
 
                       {isExpanded && (
                         <tr>
-                          <td colSpan={7} style={{ padding: 0, borderBottom: '2px solid #1d4ed8' }}>
+                          <td colSpan={6} style={{ padding: 0, borderBottom: '2px solid #1d4ed8' }}>
                             <ProfileInlineEditor
                               profile={p}
                               onToggle={() => handleToggle(p.id)}
@@ -1164,22 +1054,6 @@ export function ProfilesPage() {
                 })}
               </tbody>
             </table>
-          </div>
-
-          <div
-            style={{
-              padding: '0.85rem 1.25rem',
-              background: '#f8fafc',
-              borderTop: '1px solid #e2e8f0',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              fontSize: '12px',
-              color: '#64748b',
-            }}
-          >
-            <span>Menampilkan {profiles.length} master profil paket</span>
-            <span>Standar Alokasi Kecepatan Hotspot</span>
           </div>
         </div>
       </div>

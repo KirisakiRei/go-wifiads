@@ -43,21 +43,60 @@ func NewRadiusAuthService(
 	}
 }
 
-// LookupNAS resolves the RADIUS client by source IP and returns its plaintext
-// shared secret. Unknown peers are rejected before the packet is parsed.
+// LookupNAS resolves the RADIUS client by NAS-Identifier (for dynamic ISP public IPs)
+// or by source IP, auto-updating the stored NAS public IP when it changes.
 func (s *radiusAuthService) LookupNAS(ctx context.Context, remoteIP string) (*model.NASClient, string, error) {
-	ip := normalizeIP(remoteIP)
-	if ip == "" {
+	raw := strings.TrimSpace(remoteIP)
+	nasIdent := ""
+	if idx := strings.Index(raw, "|"); idx != -1 {
+		nasIdent = strings.TrimSpace(raw[idx+1:])
+		raw = raw[:idx]
+	}
+	ip := normalizeIP(raw)
+	if ip == "" && nasIdent == "" {
 		return nil, "", apperror.ErrUnauthorized
 	}
-	client, err := s.nas.FindByIP(ctx, ip)
-	if err != nil {
-		if errors.Is(err, apperror.ErrNotFound) {
-			s.logger.Warn("radius request from unknown nas", slog.String("remote_ip", ip))
-			return nil, "", apperror.ErrUnauthorized
+
+	var client *model.NASClient
+	var err error
+
+	// 1. Primary lookup by NAS-Identifier so routers on dynamic public IPs always work
+	if nasIdent != "" {
+		client, err = s.nas.FindByNASIdentifier(ctx, nasIdent)
+		if err == nil && client != nil && ip != "" && client.IPAddress != ip {
+			client.IPAddress = ip
+			client.UpdatedAt = time.Now().UTC()
+			if upErr := s.nas.UpsertForRouter(ctx, client); upErr != nil {
+				s.logger.Warn("failed to auto-update nas dynamic public ip",
+					slog.String("nas_identifier", client.NASIdentifier),
+					slog.String("new_ip", ip),
+					slog.String("error", upErr.Error()),
+				)
+			}
 		}
-		return nil, "", err
 	}
+
+	// 2. Fallback lookup by IP address
+	if client == nil {
+		client, err = s.nas.FindByIP(ctx, ip)
+		if err != nil {
+			if errors.Is(err, apperror.ErrNotFound) {
+				// 3. Single-router fallback only when NAS-Identifier attribute is present in packet
+				if nasIdent != "" {
+					if all, listErr := s.nas.ListAll(ctx); listErr == nil && len(all) == 1 && all[0].IsActive {
+						client = &all[0]
+					}
+				}
+				if client == nil {
+					s.logger.Warn("radius request from unknown nas", slog.String("remote_ip", ip), slog.String("nas_identifier", nasIdent))
+					return nil, "", apperror.ErrUnauthorized
+				}
+			} else {
+				return nil, "", err
+			}
+		}
+	}
+
 	if !client.IsActive {
 		s.logger.Warn("radius request from disabled nas",
 			slog.String("remote_ip", ip),
@@ -167,6 +206,16 @@ func (s *radiusAuthService) Authenticate(ctx context.Context, req RadiusAuthRequ
 	sessionTimeout := voucher.SessionTimeoutSeconds
 	if sessionTimeout <= 0 {
 		sessionTimeout = 3600
+	}
+	if voucher.UsedAt != nil && !voucher.ExpiresAt.IsZero() {
+		remaining := int(voucher.ExpiresAt.Sub(now).Seconds())
+		if remaining < 1 {
+			_ = s.vouchers.UpdateStatus(ctx, voucher.ID, model.VoucherStatusExpired)
+			return reject("voucher_expired"), nil
+		}
+		if remaining < sessionTimeout {
+			sessionTimeout = remaining
+		}
 	}
 	return &RadiusAuthResult{
 		Accepted:              true,

@@ -20,6 +20,25 @@ type fakeNASRepo struct {
 }
 
 func (f *fakeNASRepo) Create(ctx context.Context, c *model.NASClient) error { return nil }
+func (f *fakeNASRepo) UpsertForRouter(ctx context.Context, c *model.NASClient) error {
+	f.byIP[c.IPAddress] = c
+	return nil
+}
+func (f *fakeNASRepo) FindByRouterID(ctx context.Context, routerID string) (*model.NASClient, error) {
+	for _, c := range f.byIP {
+		if c.RouterID == routerID {
+			return c, nil
+		}
+	}
+	return nil, apperror.ErrNotFound
+}
+func (f *fakeNASRepo) ListAll(ctx context.Context) ([]model.NASClient, error) {
+	out := make([]model.NASClient, 0, len(f.byIP))
+	for _, c := range f.byIP {
+		out = append(out, *c)
+	}
+	return out, nil
+}
 func (f *fakeNASRepo) FindByIP(ctx context.Context, ip string) (*model.NASClient, error) {
 	if c, ok := f.byIP[ip]; ok {
 		return c, nil

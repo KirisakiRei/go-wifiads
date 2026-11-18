@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"net/url"
 	"strings"
 	"time"
@@ -18,14 +19,16 @@ import (
 )
 
 type portalService struct {
-	sessions repository.PortalSessionRepository
-	vouchers repository.VoucherRepository
-	visitors repository.WifiVisitorRepository
-	routers  repository.RouterRepository
-	sites    repository.SiteRepository
-	ads      repository.AdvertisementRepository
-	profiles repository.ConnectProfileRepository
-	logger   *slog.Logger
+	sessions    repository.PortalSessionRepository
+	vouchers    repository.VoucherRepository
+	visitors    repository.WifiVisitorRepository
+	routers     repository.RouterRepository
+	sites       repository.SiteRepository
+	ads         repository.AdvertisementRepository
+	profiles    repository.ConnectProfileRepository
+	marketplace repository.MarketplaceRepository
+	partners    repository.PartnerRepository
+	logger      *slog.Logger
 
 	voucherKey            []byte
 	usernamePrefix        string
@@ -49,6 +52,8 @@ type PortalServiceOptions struct {
 	DefaultSessionTimeout int
 	AllowedLoginHosts     []string
 	DevMode               bool
+	Marketplace           repository.MarketplaceRepository
+	Partners              repository.PartnerRepository
 }
 
 // NewPortalService builds the visitor portal service.
@@ -71,6 +76,8 @@ func NewPortalService(
 		routers:               routers,
 		sites:                 sites,
 		ads:                   ads,
+		marketplace:           opts.Marketplace,
+		partners:              opts.Partners,
 		logger:                logger,
 		voucherKey:            opts.VoucherKey,
 		usernamePrefix:        opts.UsernamePrefix,
@@ -92,12 +99,100 @@ func (s *portalService) CurrentAdvertisement(ctx context.Context) (*model.Advert
 		}
 		return nil, err
 	}
+	if ad != nil {
+		ad.ImageURL = normalizeAdMediaURL(ad.ImageURL)
+	}
 	return ad, nil
+}
+
+// SelectAdvertisementForRouter picks an eligible paid advertiser campaign targeting
+// the router (matching schedule & active balance) in fair rotation, falling back
+// to the default Admin House Ad when none matches.
+func (s *portalService) SelectAdvertisementForRouter(ctx context.Context, nasIdentifier string) (*model.Advertisement, error) {
+	if s.marketplace != nil && s.routers != nil {
+		router, rErr := s.resolveRouter(ctx, "", nasIdentifier)
+		if rErr == nil && router != nil {
+			var site *model.Site
+			if s.sites != nil {
+				site, _ = s.sites.FindByID(ctx, router.SiteID)
+			}
+			ad, _, selErr := s.pickMarketplaceAd(ctx, router, site, time.Now().UTC())
+			if selErr == nil && ad != nil {
+				ad.ImageURL = normalizeAdMediaURL(ad.ImageURL)
+				_ = s.marketplace.TouchCampaignLastShown(ctx, ad.ID, time.Now().UTC())
+				return ad, nil
+			}
+		}
+	}
+	return s.CurrentAdvertisement(ctx)
+}
+
+func (s *portalService) resolveMultiplierForRouter(ctx context.Context, router *model.Router) float64 {
+	if s.marketplace == nil || router == nil {
+		return 1.0
+	}
+	tiers, err := s.marketplace.ListLocationTiers(ctx, false)
+	if err != nil || len(tiers) == 0 {
+		return 1.0
+	}
+	var avgConn, avgImp int64
+	if s.partners != nil {
+		if trMap, tErr := s.partners.GetRouterTraffic7d(ctx, time.Now().UTC().AddDate(0, 0, -7)); tErr == nil {
+			tr := trMap[router.ID]
+			avgConn = computeAvg7d(tr.TotalConnects7d)
+			avgImp = computeAvg7d(tr.TotalImpressions7d)
+		}
+	}
+	_, _, mult := ResolveEffectiveRouterTier(router, tiers, avgConn, avgImp)
+	if mult <= 0 {
+		return 1.0
+	}
+	return mult
+}
+
+func (s *portalService) pickMarketplaceAd(ctx context.Context, router *model.Router, site *model.Site, nowUTC time.Time) (*model.Advertisement, int64, error) {
+	if s.marketplace == nil || router == nil {
+		return nil, 0, apperror.ErrNotFound
+	}
+	setting, err := s.marketplace.GetPlatformSetting(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	multiplier := s.resolveMultiplierForRouter(ctx, router)
+	tzName := "Asia/Jakarta"
+	if site != nil && strings.TrimSpace(site.Timezone) != "" {
+		tzName = strings.TrimSpace(site.Timezone)
+	}
+	loc, locErr := time.LoadLocation(tzName)
+	if locErr != nil {
+		loc = time.FixedZone("WIB", 7*3600)
+	}
+	return s.marketplace.SelectEligibleCampaignForRouter(ctx, router.ID, multiplier, setting, nowUTC.In(loc))
+}
+
+func (s *portalService) computeRouterAdCost(ctx context.Context, router *model.Router, ad *model.Advertisement) int64 {
+	if ad == nil || ad.AdvertiserID == nil || *ad.AdvertiserID == "" || s.marketplace == nil {
+		return 0
+	}
+	setting, err := s.marketplace.GetPlatformSetting(ctx)
+	if err != nil {
+		return 50
+	}
+	multiplier := s.resolveMultiplierForRouter(ctx, router)
+	base := setting.BasePriceImageIDR
+	if strings.EqualFold(ad.MediaType, "video") {
+		base = setting.BasePriceVideoIDR
+	}
+	cost := int64(math.Round(float64(base) * multiplier))
+	if cost < 1 {
+		cost = 1
+	}
+	return cost
 }
 
 // validateLoginURL allowlists the Hotspot login host so the portal can never
 // forward credentials to an arbitrary destination.
-func (s *portalService) validateLoginURL(raw string) error {
+func (s *portalService) validateLoginURL(ctx context.Context, raw string) error {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		if s.devMode {
@@ -109,13 +204,25 @@ func (s *portalService) validateLoginURL(raw string) error {
 	if err != nil || parsed.Host == "" {
 		return apperror.New(apperror.ErrBadRequest, "link-login-only is not a valid URL")
 	}
+	host := strings.ToLower(parsed.Hostname())
+
+	// Also allow any Hotspot Gateway IP registered in active routers.
+	if s.routers != nil {
+		if routers, rErr := s.routers.ListActive(ctx); rErr == nil {
+			for _, r := range routers {
+				if strings.EqualFold(strings.TrimSpace(r.IPAddress), host) {
+					return nil
+				}
+			}
+		}
+	}
+
 	if len(s.allowedHosts) == 0 {
 		if s.devMode {
 			return nil
 		}
 		return apperror.New(apperror.ErrForbidden, "no allowed login host is configured")
 	}
-	host := strings.ToLower(parsed.Hostname())
 	for _, allowed := range s.allowedHosts {
 		allowed = strings.ToLower(strings.TrimSpace(allowed))
 		if allowed == "" {
@@ -136,7 +243,7 @@ func (s *portalService) validateLoginURL(raw string) error {
 
 // CreateSession stores the untrusted redirect context and starts the ad timer.
 func (s *portalService) CreateSession(ctx context.Context, req dto.CreatePortalSessionRequest, userAgent string) (*dto.PortalSessionResponse, error) {
-	if err := s.validateLoginURL(req.LinkLoginOnly); err != nil {
+	if err := s.validateLoginURL(ctx, req.LinkLoginOnly); err != nil {
 		return nil, err
 	}
 
@@ -155,26 +262,102 @@ func (s *portalService) CreateSession(ctx context.Context, req dto.CreatePortalS
 	}
 
 	now := time.Now().UTC()
+	deviceMAC := utils.NormalizeMAC(req.MAC)
+
+	// Anti-Ad-Spam & Auto-Reconnect:
+	// If this device (MAC) already has an ACTIVE, unexpired voucher on this router,
+	// immediately return its credentials so the portal auto-authenticates the user
+	// without forcing them to watch the ad again or creating duplicate visitor rows.
+	if deviceMAC != "" && s.vouchers != nil {
+		if latest, vErr := s.vouchers.FindLatestByMAC(ctx, deviceMAC, router.ID); vErr == nil && latest != nil {
+			if latest.Status == model.VoucherStatusActive && now.Before(latest.ExpiresAt) {
+				tempSession := &model.PortalSession{
+					DeviceMAC:     deviceMAC,
+					DeviceIP:      strings.TrimSpace(req.IP),
+					LinkLoginOnly: strings.TrimSpace(req.LinkLoginOnly),
+					LinkLogin:     strings.TrimSpace(req.LinkLogin),
+					LinkOrig:      strings.TrimSpace(req.LinkOrig),
+					ChapID:        strings.TrimSpace(req.ChapID),
+					ChapChallenge: strings.TrimSpace(req.ChapChallenge),
+				}
+				if connData, cErr := s.buildConnectResponse(tempSession, latest); cErr == nil {
+					rem := int(latest.ExpiresAt.Sub(now).Seconds())
+					if rem > 0 {
+						connData.SessionTimeoutSeconds = rem
+					}
+					return &dto.PortalSessionResponse{
+						SessionToken:       "auto-resume",
+						Status:             model.PortalSessionStatusVoucherIssued,
+						AdStartedAt:        now,
+						AdDurationSeconds:  0,
+						ConnectAvailableAt: now,
+						ExpiresAt:          latest.ExpiresAt,
+						SiteName:           site.Name,
+						RouterName:         router.Name,
+						AuthMode:           authModeOf(tempSession),
+						AutoConnect:        true,
+						ConnectData:        connData,
+					}, nil
+				}
+			}
+		}
+	}
+
+	var selectedAd *model.Advertisement
+	var adCost int64
+	if reqAdID := strings.TrimSpace(req.AdvertisementID); reqAdID != "" {
+		if s.marketplace != nil {
+			if found, fErr := s.marketplace.FindCampaignByID(ctx, reqAdID); fErr == nil && found != nil && found.IsActive {
+				selectedAd = found
+				adCost = s.computeRouterAdCost(ctx, router, found)
+			}
+		} else if s.ads != nil {
+			if found, fErr := s.ads.FindByID(ctx, reqAdID); fErr == nil && found != nil && found.IsActive {
+				selectedAd = found
+			}
+		}
+	}
+	if selectedAd == nil {
+		if picked, cost, pErr := s.pickMarketplaceAd(ctx, router, site, now); pErr == nil && picked != nil {
+			selectedAd = picked
+			adCost = cost
+			if s.marketplace != nil {
+				_ = s.marketplace.TouchCampaignLastShown(ctx, picked.ID, now)
+			}
+		} else if fallback, fbErr := s.CurrentAdvertisement(ctx); fbErr == nil && fallback != nil {
+			selectedAd = fallback
+			adCost = 0
+		}
+	}
+
+	var selectedAdID *string
+	if selectedAd != nil && selectedAd.ID != "" {
+		idCopy := selectedAd.ID
+		selectedAdID = &idCopy
+	}
+
 	session := &model.PortalSession{
 		Base: model.Base{
 			ID:        uuid.NewString(),
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		TokenHash:     utils.HashToken(token),
-		SiteID:        router.SiteID,
-		RouterID:      router.ID,
-		DeviceMAC:     utils.NormalizeMAC(req.MAC),
-		DeviceIP:      strings.TrimSpace(req.IP),
-		LinkLoginOnly: strings.TrimSpace(req.LinkLoginOnly),
-		LinkLogin:     strings.TrimSpace(req.LinkLogin),
-		LinkOrig:      strings.TrimSpace(req.LinkOrig),
-		ChapID:        strings.TrimSpace(req.ChapID),
-		ChapChallenge: strings.TrimSpace(req.ChapChallenge),
-		UserAgent:     truncate(userAgent, 500),
-		Status:        model.PortalSessionStatusPendingAd,
-		AdStartedAt:   now,
-		ExpiresAt:     now.Add(s.sessionTTL),
+		TokenHash:         utils.HashToken(token),
+		SiteID:            router.SiteID,
+		RouterID:          router.ID,
+		AdvertisementID:   selectedAdID,
+		AdCostSnapshotIDR: adCost,
+		DeviceMAC:         deviceMAC,
+		DeviceIP:          strings.TrimSpace(req.IP),
+		LinkLoginOnly:     strings.TrimSpace(req.LinkLoginOnly),
+		LinkLogin:         strings.TrimSpace(req.LinkLogin),
+		LinkOrig:          strings.TrimSpace(req.LinkOrig),
+		ChapID:            strings.TrimSpace(req.ChapID),
+		ChapChallenge:     strings.TrimSpace(req.ChapChallenge),
+		UserAgent:         truncate(userAgent, 500),
+		Status:            model.PortalSessionStatusPendingAd,
+		AdStartedAt:       now,
+		ExpiresAt:         now.Add(s.sessionTTL),
 	}
 	if err := s.sessions.Create(ctx, session); err != nil {
 		return nil, err
@@ -201,7 +384,7 @@ func (s *portalService) CreateSession(ctx context.Context, req dto.CreatePortalS
 		return nil, err
 	}
 
-	adDur := s.activeAdDuration(ctx)
+	adDur := s.sessionAdDuration(ctx, session)
 	return &dto.PortalSessionResponse{
 		SessionToken:       token,
 		Status:             session.Status,
@@ -365,7 +548,7 @@ func (s *portalService) Connect(ctx context.Context, token string) (*dto.Connect
 		return nil, apperror.New(apperror.ErrForbidden, "portal session has expired")
 	}
 
-	adDur := s.activeAdDuration(ctx)
+	adDur := s.sessionAdDuration(ctx, session)
 	readyAt := session.AdStartedAt.Add(adDur)
 	if now.Before(readyAt) {
 		remaining := int(readyAt.Sub(now).Round(time.Second) / time.Second)
@@ -377,10 +560,21 @@ func (s *portalService) Connect(ctx context.Context, token string) (*dto.Connect
 		})
 	}
 
+	// Atomically record completed ad impression and settle advertiser wallet charge
+	var settledAd *model.Advertisement
+	if s.marketplace != nil && session.AdvertisementID != nil && *session.AdvertisementID != "" {
+		ad, settleErr := s.marketplace.SettlePortalSessionAd(ctx, session.ID, now)
+		if settleErr != nil {
+			s.logger.Warn("failed to settle portal session ad impression",
+				slog.String("portal_session_id", session.ID),
+				slog.String("error", settleErr.Error()),
+			)
+		} else {
+			settledAd = ad
+		}
+	}
+
 	// 2. Cek user yang sama dari MAC address dan Router
-	// Ketika gagal login atau gagal konek ke internet, jangan langsung generate voucher baru.
-	// Jika voucher sebelumnya belum kadaluarsa dan belum dipakai (status ISSUED), coba pakai voucher itu lagi.
-	// Jika voucher tersebut sudah kadaluarsa (now > expires_at), tandai EXPIRED, lalu terbitkan voucher baru.
 	if session.DeviceMAC != "" {
 		latestVoucher, vErr := s.vouchers.FindLatestByMAC(ctx, session.DeviceMAC, session.RouterID)
 		if vErr == nil && latestVoucher != nil {
@@ -388,7 +582,12 @@ func (s *portalService) Connect(ctx context.Context, token string) (*dto.Connect
 				if now.Before(latestVoucher.ExpiresAt) {
 					_ = s.vouchers.UpdatePortalSessionID(ctx, latestVoucher.ID, session.ID)
 					s.afterVoucherIssued(ctx, session, latestVoucher, now)
-					return s.buildConnectResponse(session, latestVoucher)
+					resp, bErr := s.buildConnectResponse(session, latestVoucher)
+					if bErr == nil && settledAd != nil && strings.TrimSpace(settledAd.TargetURL) != "" {
+						resp.PromoURL = "/api/v1/portal-sessions/" + url.PathEscape(token) + "/click"
+						resp.PromoTitle = settledAd.Title
+					}
+					return resp, bErr
 				}
 				_ = s.vouchers.UpdateStatus(ctx, latestVoucher.ID, model.VoucherStatusExpired)
 			}
@@ -399,7 +598,30 @@ func (s *portalService) Connect(ctx context.Context, token string) (*dto.Connect
 	if err != nil {
 		return nil, err
 	}
-	return s.buildConnectResponse(session, voucher)
+	resp, err := s.buildConnectResponse(session, voucher)
+	if err == nil && settledAd != nil && strings.TrimSpace(settledAd.TargetURL) != "" {
+		resp.PromoURL = "/api/v1/portal-sessions/" + url.PathEscape(token) + "/click"
+		resp.PromoTitle = settledAd.Title
+	}
+	return resp, err
+}
+
+func (s *portalService) RecordPromoClick(ctx context.Context, token string) (string, error) {
+	session, err := s.sessions.FindByTokenHash(ctx, utils.HashToken(token))
+	if err != nil {
+		return "", err
+	}
+	if s.marketplace == nil {
+		return "", apperror.ErrNotFound
+	}
+	targetURL, err := s.marketplace.RecordAdClickByPortalSession(ctx, session.ID, time.Now().UTC())
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(targetURL) == "" {
+		return "https://www.google.com", nil
+	}
+	return targetURL, nil
 }
 
 func (s *portalService) issueVoucher(ctx context.Context, session *model.PortalSession, now time.Time) (*model.Voucher, error) {
@@ -431,35 +653,35 @@ func (s *portalService) issueVoucher(ctx context.Context, session *model.PortalS
 		}
 	}
 
-	// Resolve profile dari session (jika ada), router default profile, atau service default.
+	// Resolve profile dari session (jika ada), router default profile, atau global default profile.
 	var profileID *string
 	var bwUp, bwDown int
 
-	if session.ProfileID != nil {
-		prof, profErr := s.profiles.FindByID(ctx, *session.ProfileID)
-		if profErr == nil {
-			profileID = &prof.ID
-			bwUp = prof.BandwidthUpKbps
-			bwDown = prof.BandwidthDownKbps
-			if prof.SessionTimeoutSeconds > 0 {
-				sessionTimeout = prof.SessionTimeoutSeconds
-			}
-			if prof.VoucherTTLSeconds > 0 {
-				voucherTTL = time.Duration(prof.VoucherTTLSeconds) * time.Second
-			}
+	var resolvedProfile *model.ConnectProfile
+	if session.ProfileID != nil && s.profiles != nil {
+		if prof, profErr := s.profiles.FindByID(ctx, *session.ProfileID); profErr == nil {
+			resolvedProfile = prof
 		}
-	} else if router != nil && router.DefaultProfileID != nil && *router.DefaultProfileID != "" {
-		prof, profErr := s.profiles.FindByID(ctx, *router.DefaultProfileID)
-		if profErr == nil {
-			profileID = &prof.ID
-			bwUp = prof.BandwidthUpKbps
-			bwDown = prof.BandwidthDownKbps
-			if prof.SessionTimeoutSeconds > 0 {
-				sessionTimeout = prof.SessionTimeoutSeconds
-			}
-			if prof.VoucherTTLSeconds > 0 {
-				voucherTTL = time.Duration(prof.VoucherTTLSeconds) * time.Second
-			}
+	}
+	if resolvedProfile == nil && router != nil && router.DefaultProfileID != nil && *router.DefaultProfileID != "" && s.profiles != nil {
+		if prof, profErr := s.profiles.FindByID(ctx, *router.DefaultProfileID); profErr == nil {
+			resolvedProfile = prof
+		}
+	}
+	if resolvedProfile == nil && s.profiles != nil {
+		if prof, profErr := s.profiles.FindDefault(ctx); profErr == nil {
+			resolvedProfile = prof
+		}
+	}
+	if resolvedProfile != nil {
+		profileID = &resolvedProfile.ID
+		bwUp = resolvedProfile.BandwidthUpKbps
+		bwDown = resolvedProfile.BandwidthDownKbps
+		if resolvedProfile.SessionTimeoutSeconds > 0 {
+			sessionTimeout = resolvedProfile.SessionTimeoutSeconds
+		}
+		if resolvedProfile.VoucherTTLSeconds > 0 {
+			voucherTTL = time.Duration(resolvedProfile.VoucherTTLSeconds) * time.Second
 		}
 	}
 
@@ -471,6 +693,20 @@ func (s *portalService) issueVoucher(ctx context.Context, session *model.PortalS
 	if err != nil {
 		return nil, err
 	}
+
+	routerLabel := "Hotspot"
+	if router != nil && router.Name != "" {
+		routerLabel = router.Name
+	}
+	surveyNote := "Isi Survei"
+	if session.SurveySkipped {
+		surveyNote = "Tanpa Survei"
+	}
+	macLabel := session.DeviceMAC
+	if macLabel == "" {
+		macLabel = "—"
+	}
+	informativeNote := "Router " + routerLabel + " • " + surveyNote + " • MAC " + macLabel
 
 	for attempt := 0; attempt < 5; attempt++ {
 		username, genErr := utils.GenerateCustomVoucherUsername(prefix, digitCount, numericOnly)
@@ -492,7 +728,7 @@ func (s *portalService) issueVoucher(ctx context.Context, session *model.PortalS
 			PortalSessionID:       &sessionID,
 			ExpectedMAC:           session.DeviceMAC,
 			CreatedBy:             "portal",
-			Note:                  "issued by portal session",
+			Note:                  informativeNote,
 			ExpiresAt:             now.Add(voucherTTL),
 			SessionTimeoutSeconds: sessionTimeout,
 			ProfileID:             profileID,
@@ -569,6 +805,21 @@ func (s *portalService) buildConnectResponse(session *model.PortalSession, vouch
 		BandwidthUpKbps:       voucher.BandwidthUpKbps,
 		BandwidthDownKbps:     voucher.BandwidthDownKbps,
 	}, nil
+}
+
+func (s *portalService) sessionAdDuration(ctx context.Context, session *model.PortalSession) time.Duration {
+	if session != nil && session.AdvertisementID != nil && *session.AdvertisementID != "" {
+		if s.marketplace != nil {
+			if ad, err := s.marketplace.FindCampaignByID(ctx, *session.AdvertisementID); err == nil && ad != nil && ad.DurationSeconds > 0 {
+				return time.Duration(ad.DurationSeconds) * time.Second
+			}
+		} else if s.ads != nil {
+			if ad, err := s.ads.FindByID(ctx, *session.AdvertisementID); err == nil && ad != nil && ad.DurationSeconds > 0 {
+				return time.Duration(ad.DurationSeconds) * time.Second
+			}
+		}
+	}
+	return s.activeAdDuration(ctx)
 }
 
 func (s *portalService) activeAdDuration(ctx context.Context) time.Duration {

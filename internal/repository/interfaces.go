@@ -19,6 +19,16 @@ type AdminUserRepository interface {
 	Count(ctx context.Context) (int64, error)
 }
 
+// RoleRepository is the persistence contract for RBAC roles.
+type RoleRepository interface {
+	Create(ctx context.Context, role *model.Role) error
+	FindByID(ctx context.Context, id string) (*model.Role, error)
+	FindByName(ctx context.Context, name string) (*model.Role, error)
+	List(ctx context.Context) ([]model.Role, error)
+	Update(ctx context.Context, role *model.Role) error
+	Delete(ctx context.Context, id string) error
+}
+
 // SiteRepository is the persistence contract for locations.
 type SiteRepository interface {
 	Create(ctx context.Context, site *model.Site) error
@@ -30,6 +40,7 @@ type SiteRepository interface {
 // RouterRepository is the persistence contract for MikroTik devices.
 type RouterRepository interface {
 	Create(ctx context.Context, router *model.Router) error
+	Update(ctx context.Context, router *model.Router) error
 	FindByID(ctx context.Context, id string) (*model.Router, error)
 	FindByNASIdentifier(ctx context.Context, nasIdentifier string) (*model.Router, error)
 	ListActive(ctx context.Context) ([]model.Router, error)
@@ -40,8 +51,11 @@ type RouterRepository interface {
 // NASClientRepository is the persistence contract for RADIUS clients.
 type NASClientRepository interface {
 	Create(ctx context.Context, client *model.NASClient) error
+	UpsertForRouter(ctx context.Context, client *model.NASClient) error
+	FindByRouterID(ctx context.Context, routerID string) (*model.NASClient, error)
 	FindByIP(ctx context.Context, ipAddress string) (*model.NASClient, error)
 	FindByNASIdentifier(ctx context.Context, nasIdentifier string) (*model.NASClient, error)
+	ListAll(ctx context.Context) ([]model.NASClient, error)
 	Count(ctx context.Context) (int64, error)
 }
 
@@ -87,6 +101,8 @@ type VoucherRepository interface {
 	FindByID(ctx context.Context, id string) (*model.Voucher, error)
 	FindByPortalSessionID(ctx context.Context, portalSessionID string) (*model.Voucher, error)
 	UpdateStatus(ctx context.Context, id, status string) error
+	ActivateSessionWindow(ctx context.Context, id string, at time.Time, expiresAt time.Time) error
+	DeactivateOtherActiveByMAC(ctx context.Context, mac, keepVoucherID string, at time.Time) error
 	MarkUsed(ctx context.Context, id string, at time.Time) error
 	MarkExpiredBefore(ctx context.Context, now time.Time) (int64, error)
 	List(ctx context.Context, filter VoucherFilter) ([]model.Voucher, int64, error)
@@ -110,7 +126,9 @@ type WifiVisitorRepository interface {
 	FindByPortalSessionID(ctx context.Context, portalSessionID string) (*model.WifiVisitor, error)
 	AttachVoucher(ctx context.Context, portalSessionID, voucherID, username string, at time.Time) error
 	MarkConnected(ctx context.Context, username string, at time.Time) error
+	MarkInterim(ctx context.Context, username string, at time.Time, sessionTimeSeconds int64) error
 	MarkDisconnected(ctx context.Context, username string, at time.Time, sessionTimeSeconds int64) error
+	CloseOtherActiveByMAC(ctx context.Context, mac, keepUsername string, at time.Time) error
 	MarkStale(ctx context.Context, username string) error
 	List(ctx context.Context, filter VisitorFilter) ([]model.WifiVisitor, int64, error)
 	CountByStatus(ctx context.Context) (map[string]int64, error)
@@ -141,6 +159,7 @@ type AccountingRepository interface {
 	ApplyStart(ctx context.Context, session *model.AccountingSession) (*model.AccountingSession, error)
 	ApplyInterim(ctx context.Context, nasIdentifier, acctSessionID string, updates AccountingUpdates) (*model.AccountingSession, error)
 	ApplyStop(ctx context.Context, nasIdentifier, acctSessionID string, updates AccountingUpdates) (*model.AccountingSession, error)
+	CloseOtherActiveByMAC(ctx context.Context, mac, keepAcctSessionID string, at time.Time) error
 	FindByNASAndAcctSession(ctx context.Context, nasIdentifier, acctSessionID string) (*model.AccountingSession, error)
 	FindByUsernames(ctx context.Context, usernames []string) ([]model.AccountingSession, error)
 	RecordEvent(ctx context.Context, event *model.AccountingEvent) (bool, error)

@@ -58,13 +58,28 @@ type SessionListQuery struct {
 	Status string `form:"status" binding:"omitempty,oneof=ACTIVE CLOSED STALE"`
 }
 
-// OverviewResponse powers the admin dashboard cards.
+// ChartPoint represents one time-series point on the dashboard area chart.
+type ChartPoint struct {
+	Label       string `json:"label"`
+	Impressions int64  `json:"impressions"`
+	Logins      int64  `json:"logins"`
+}
+
+// OverviewResponse powers the admin dashboard cards and live area chart.
 type OverviewResponse struct {
-	ActiveDevices  int64 `json:"active_devices"`
-	PendingDevices int64 `json:"pending_devices"`
-	ActiveSessions int64 `json:"active_sessions"`
-	TotalVouchers  int64 `json:"total_vouchers"`
-	IssuedVouchers int64 `json:"issued_vouchers"`
-	ActiveVouchers int64 `json:"active_vouchers"`
-	UsedVouchers   int64 `json:"used_vouchers"`
+	ActiveDevices        int64        `json:"active_devices"`
+	PendingDevices       int64        `json:"pending_devices"`
+	ActiveSessions       int64        `json:"active_sessions"`
+	TotalVouchers        int64        `json:"total_vouchers"`
+	IssuedVouchers       int64        `json:"issued_vouchers"`
+	ActiveVouchers       int64        `json:"active_vouchers"`
+	UsedVouchers         int64        `json:"used_vouchers"`
+	TotalInputOctets     int64        `json:"total_input_octets"`
+	TotalOutputOctets    int64        `json:"total_output_octets"`
+	AvgAdDurationSeconds int          `json:"avg_ad_duration_seconds"`
+	LoginSuccessRate     float64      `json:"login_success_rate"`
+	PeakWindowLabel      string       `json:"peak_window_label"`
+	TrendToday           []ChartPoint `json:"trend_today"`
+	Trend7d              []ChartPoint `json:"trend_7d"`
+	Trend30d             []ChartPoint `json:"trend_30d"`
 }

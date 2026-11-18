@@ -66,6 +66,10 @@ func (f *fakeAccountingRepo) ApplyStop(ctx context.Context, nas, id string, u re
 	return s, nil
 }
 
+func (f *fakeAccountingRepo) CloseOtherActiveByMAC(ctx context.Context, mac, keepAcctSessionID string, at time.Time) error {
+	return nil
+}
+
 func (f *fakeAccountingRepo) FindByNASAndAcctSession(ctx context.Context, nas, id string) (*model.AccountingSession, error) {
 	if s, ok := f.sessions[sessionKey(nas, id)]; ok {
 		return s, nil

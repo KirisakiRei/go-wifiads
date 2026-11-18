@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"io"
+	"mime"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -10,18 +13,25 @@ import (
 	"github.com/google/uuid"
 
 	"wifiads/internal/dto"
+	"wifiads/internal/middleware"
 	"wifiads/internal/service"
 	"wifiads/pkg/httpx"
+	"wifiads/pkg/storage"
 )
 
-// AdvertisementHandler handles sponsor advertisement management.
+// AdvertisementHandler handles sponsor advertisement management and R2 media uploads.
 type AdvertisementHandler struct {
 	ads service.AdvertisementService
+	r2  *storage.R2Client
 }
 
 // NewAdvertisementHandler creates a new AdvertisementHandler instance.
-func NewAdvertisementHandler(ads service.AdvertisementService) *AdvertisementHandler {
-	return &AdvertisementHandler{ads: ads}
+func NewAdvertisementHandler(ads service.AdvertisementService, r2 ...*storage.R2Client) *AdvertisementHandler {
+	h := &AdvertisementHandler{ads: ads}
+	if len(r2) > 0 {
+		h.r2 = r2[0]
+	}
+	return h
 }
 
 // List returns all advertisements.
@@ -72,16 +82,19 @@ func (h *AdvertisementHandler) Update(c *gin.Context) {
 	httpx.OK(c, "Advertisement updated", item)
 }
 
-// Delete removes an advertisement.
+// Delete removes an advertisement and returns a standard 200 JSON payload.
 func (h *AdvertisementHandler) Delete(c *gin.Context) {
 	if err := h.ads.Delete(c.Request.Context(), c.Param("id")); err != nil {
 		writeError(c, err)
 		return
 	}
-	c.Status(http.StatusNoContent)
+	httpx.OK(c, "Advertisement deleted", nil)
 }
 
-// UploadImage handles file uploads for advertisement banners (images and videos).
+// UploadImage handles file uploads for advertisement banners (images, videos, and thumbnails)
+// into a structured Cloudflare R2 hierarchy:
+//   - Admin uploads      : ads/admin/media/{videos|photos|thumbnails}/<uuid>.<ext>
+//   - Advertiser uploads : ads/pengiklan/<user_id>/media/{videos|photos|thumbnails}/<uuid>.<ext>
 func (h *AdvertisementHandler) UploadImage(c *gin.Context) {
 	file, err := c.FormFile("image")
 	if err != nil {
@@ -112,7 +125,6 @@ func (h *AdvertisementHandler) UploadImage(c *gin.Context) {
 		return
 	}
 
-	// 50 MB limit for video, 10 MB limit for images
 	maxSize := int64(10 * 1024 * 1024)
 	if isVideo {
 		maxSize = 50 * 1024 * 1024
@@ -125,16 +137,60 @@ func (h *AdvertisementHandler) UploadImage(c *gin.Context) {
 		return
 	}
 
-	dir := filepath.Join(".", "uploads", "ads")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		httpx.Error(c, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", "Gagal menyiapkan folder penyimpanan", err.Error())
+	src, err := file.Open()
+	if err != nil {
+		httpx.Error(c, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", "Gagal membaca file unggahan", err.Error())
+		return
+	}
+	defer src.Close()
+
+	data, err := io.ReadAll(src)
+	if err != nil {
+		httpx.Error(c, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", "Gagal membaca isi file media", err.Error())
 		return
 	}
 
+	// Build structured R2 folder path:
+	// - ads/admin/media/{videos|photos|thumbnails}/<uuid>.<ext>
+	// - ads/pengiklan/<user_id>/media/{videos|photos|thumbnails}/<uuid>.<ext>
+	role := strings.ToLower(strings.TrimSpace(middleware.AdminRole(c)))
+	adminID := strings.TrimSpace(middleware.AdminID(c))
+	ownerType := strings.ToLower(strings.TrimSpace(c.PostForm("owner_type")))
+
+	ownerPrefix := "ads/admin/media"
+	if role == "pengiklan" || role == "advertiser" || ownerType == "pengiklan" {
+		if adminID == "" {
+			adminID = "general"
+		}
+		ownerPrefix = "ads/pengiklan/" + adminID + "/media"
+	}
+
+	kind := strings.ToLower(strings.TrimSpace(c.PostForm("kind")))
+	categoryFolder := "photos"
+	if kind == "thumbnail" {
+		categoryFolder = "thumbnails"
+	} else if isVideo {
+		categoryFolder = "videos"
+	}
+
 	filename := uuid.NewString() + ext
-	dest := filepath.Join(dir, filename)
-	if err := c.SaveUploadedFile(file, dest); err != nil {
-		httpx.Error(c, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", "Gagal menyimpan file media", err.Error())
+	contentType := detectMediaContentType(ext)
+	objectKey := path.Join(ownerPrefix, categoryFolder, filename)
+
+	// 1. Primary Storage: Upload to Cloudflare R2 if configured
+	if h.r2 != nil && h.r2.Enabled() {
+		if r2Err := h.r2.PutObject(c.Request.Context(), objectKey, data, contentType); r2Err != nil {
+			httpx.Error(c, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", "Gagal mengunggah media ke Cloudflare R2 Object Storage", r2Err.Error())
+			return
+		}
+	}
+
+	// 2. Local Edge Cache: Write to ./uploads/<objectKey> for fast Range streaming
+	localFilePath := filepath.Join(".", "uploads", filepath.FromSlash(objectKey))
+	if mkErr := os.MkdirAll(filepath.Dir(localFilePath), 0o755); mkErr == nil {
+		_ = os.WriteFile(localFilePath, data, 0o644)
+	} else if h.r2 == nil || !h.r2.Enabled() {
+		httpx.Error(c, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", "Gagal menyiapkan folder penyimpanan", mkErr.Error())
 		return
 	}
 
@@ -143,10 +199,86 @@ func (h *AdvertisementHandler) UploadImage(c *gin.Context) {
 		mediaType = "video"
 	}
 
-	imageURL := "/uploads/ads/" + filename
-	httpx.Created(c, "File media berhasil diunggah", gin.H{
+	imageURL := "/uploads/" + objectKey
+	r2URL := ""
+	if h.r2 != nil && h.r2.Enabled() {
+		r2URL = h.r2.PublicURL(objectKey)
+	}
+
+	httpx.Created(c, "File media berhasil diunggah ke Cloudflare R2", gin.H{
 		"url":        imageURL,
+		"r2_url":     r2URL,
+		"object_key": objectKey,
 		"filename":   filename,
 		"media_type": mediaType,
 	})
+}
+
+// ServeMedia serves advertisement media from the local edge cache or pulls it on-demand
+// from Cloudflare R2 Object Storage. Using http.ServeFile preserves HTTP Range
+// headers (206 Partial Content) required for fast HTML5 <video> chunk streaming.
+func (h *AdvertisementHandler) ServeMedia(c *gin.Context) {
+	rawPath := strings.TrimPrefix(c.Param("filepath"), "/")
+	cleanRel := path.Clean(rawPath)
+	if cleanRel == "" || cleanRel == "." || strings.HasPrefix(cleanRel, "..") || strings.Contains(cleanRel, "\\") {
+		c.Status(http.StatusNotFound)
+		return
+	}
+
+	localPath := filepath.Join(".", "uploads", filepath.FromSlash(cleanRel))
+	if info, err := os.Stat(localPath); err == nil && !info.IsDir() {
+		c.Header("Cache-Control", "public, max-age=86400")
+		c.Header("X-Accel-Buffering", "no")
+		http.ServeFile(c.Writer, c.Request, localPath)
+		return
+	}
+
+	if h.r2 != nil && h.r2.Enabled() {
+		data, contentType, err := h.r2.GetObject(c.Request.Context(), cleanRel)
+		if err == nil {
+			if os.MkdirAll(filepath.Dir(localPath), 0o755) == nil {
+				if os.WriteFile(localPath, data, 0o644) == nil {
+					c.Header("Cache-Control", "public, max-age=86400")
+					c.Header("X-Accel-Buffering", "no")
+					http.ServeFile(c.Writer, c.Request, localPath)
+					return
+				}
+			}
+			if contentType == "" {
+				contentType = detectMediaContentType(strings.ToLower(filepath.Ext(cleanRel)))
+			}
+			c.Header("Cache-Control", "public, max-age=86400")
+			c.Header("X-Accel-Buffering", "no")
+			c.Data(http.StatusOK, contentType, data)
+			return
+		}
+	}
+
+	c.Status(http.StatusNotFound)
+}
+
+func detectMediaContentType(ext string) string {
+	switch ext {
+	case ".mp4":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	case ".ogg":
+		return "video/ogg"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	case ".svg":
+		return "image/svg+xml"
+	default:
+		if ct := mime.TypeByExtension(ext); ct != "" {
+			return ct
+		}
+		return "application/octet-stream"
+	}
 }

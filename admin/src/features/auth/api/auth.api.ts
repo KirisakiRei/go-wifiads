@@ -5,4 +5,6 @@ export const authApi = {
   login: (input: LoginInput) => apiClient<LoginResponse>('/api/v1/admin/auth/login', { method: 'POST', ...jsonBody(input) }),
   currentUser: () => apiClient<AdminUser>('/api/v1/admin/auth/me'),
   logout: () => apiClient<void>('/api/v1/admin/auth/logout', { method: 'POST' }),
+  changeOwnPassword: (password: string) =>
+    apiClient<void>('/api/v1/admin/auth/password', { method: 'PUT', ...jsonBody({ password }) }),
 }

@@ -190,10 +190,10 @@ export function SessionsPage() {
                           <td>
                             <div style={{ display: 'grid', gap: '0.15rem', fontSize: '12px' }}>
                               <span style={{ color: '#065f46', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                <ArrowDown size={11} /> {formatBytes(x.input_octets)}
+                                <ArrowDown size={11} /> {formatBytes(x.output_octets)}
                               </span>
                               <span style={{ color: '#0369a1', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                <ArrowUp size={11} /> {formatBytes(x.output_octets)}
+                                <ArrowUp size={11} /> {formatBytes(x.input_octets)}
                               </span>
                             </div>
                           </td>

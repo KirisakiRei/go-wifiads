@@ -42,6 +42,9 @@ func NewAccountingService(
 
 // Process applies one Accounting-Request idempotently.
 func (s *accountingService) Process(ctx context.Context, req RadiusAccountingRequest) error {
+	if req.StatusType == "Accounting-On" || req.StatusType == "Accounting-Off" {
+		return nil
+	}
 	if req.AcctSessionID == "" {
 		return apperror.New(apperror.ErrBadRequest, "acct-session-id is required")
 	}
@@ -137,17 +140,36 @@ func (s *accountingService) Process(ctx context.Context, req RadiusAccountingReq
 }
 
 func (s *accountingService) syncVoucherAndVisitor(ctx context.Context, req RadiusAccountingRequest, voucher *model.Voucher, voucherErr error, now time.Time) {
+	normMAC := utils.NormalizeMAC(req.CallingStationID)
+	if req.StatusType == "Start" && normMAC != "" {
+		_ = s.accounts.CloseOtherActiveByMAC(ctx, normMAC, req.AcctSessionID, now)
+		_ = s.visitors.CloseOtherActiveByMAC(ctx, normMAC, req.Username, now)
+	}
+
 	if voucherErr == nil && voucher != nil {
 		switch req.StatusType {
 		case "Start":
-			if voucher.Status == model.VoucherStatusIssued {
-				if err := s.vouchers.UpdateStatus(ctx, voucher.ID, model.VoucherStatusActive); err != nil {
-					s.logger.Warn("failed to activate voucher", slog.String("error", err.Error()))
+			if normMAC != "" {
+				_ = s.vouchers.DeactivateOtherActiveByMAC(ctx, normMAC, voucher.ID, now)
+			}
+			if voucher.Status == model.VoucherStatusIssued || voucher.UsedAt == nil {
+				if voucher.SessionTimeoutSeconds > 0 {
+					sessionExpiry := now.Add(time.Duration(voucher.SessionTimeoutSeconds) * time.Second)
+					if err := s.vouchers.ActivateSessionWindow(ctx, voucher.ID, now, sessionExpiry); err != nil {
+						s.logger.Warn("failed to activate voucher", slog.String("error", err.Error()))
+					}
+				} else {
+					if err := s.vouchers.UpdateStatus(ctx, voucher.ID, model.VoucherStatusActive); err != nil {
+						s.logger.Warn("failed to activate voucher", slog.String("error", err.Error()))
+					}
 				}
 			}
 		case "Stop":
-			if err := s.vouchers.MarkUsed(ctx, voucher.ID, now); err != nil {
-				s.logger.Warn("failed to mark voucher as used", slog.String("error", err.Error()))
+			timeout := int64(voucher.SessionTimeoutSeconds)
+			if timeout <= 0 || (!voucher.ExpiresAt.IsZero() && !now.Before(voucher.ExpiresAt)) || (req.SessionTimeSeconds > 0 && req.SessionTimeSeconds >= timeout) {
+				if err := s.vouchers.MarkUsed(ctx, voucher.ID, now); err != nil {
+					s.logger.Warn("failed to mark voucher as used", slog.String("error", err.Error()))
+				}
 			}
 		}
 	}
@@ -156,6 +178,10 @@ func (s *accountingService) syncVoucherAndVisitor(ctx context.Context, req Radiu
 	case "Start":
 		if err := s.visitors.MarkConnected(ctx, req.Username, now); err != nil {
 			s.logger.Warn("failed to mark visitor connected", slog.String("error", err.Error()))
+		}
+	case "Interim-Update":
+		if err := s.visitors.MarkInterim(ctx, req.Username, now, req.SessionTimeSeconds); err != nil {
+			s.logger.Warn("failed to mark visitor interim", slog.String("error", err.Error()))
 		}
 	case "Stop":
 		if err := s.visitors.MarkDisconnected(ctx, req.Username, now, req.SessionTimeSeconds); err != nil {

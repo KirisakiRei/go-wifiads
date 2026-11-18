@@ -20,12 +20,36 @@ import { useTableQuery } from '@/hooks/use-table-query'
 import { VoucherConfigCard } from '@/features/vouchers/components/voucher-config-card'
 import { useVouchers } from '@/features/vouchers/hooks/use-vouchers'
 
+function formatVoucherStatus(status?: string): string {
+  switch (status) {
+    case 'ACTIVE':
+      return 'Aktif'
+    case 'ISSUED':
+      return 'Siap Pakai'
+    case 'USED':
+      return 'Selesai'
+    case 'EXPIRED':
+      return 'Kedaluwarsa'
+    default:
+      return status || '—'
+  }
+}
+
+function formatBwLabel(kbps?: number): string {
+  if (!kbps || kbps <= 0) return ''
+  if (kbps >= 1024) {
+    const mb = kbps / 1024
+    return `${mb % 1 === 0 ? mb : mb.toFixed(1)} Mbps`
+  }
+  return `${kbps} Kbps`
+}
+
 export function VouchersPage() {
   const { query, searchParams, searchTerm, setSearchTerm, setFilter } = useTableQuery(350)
   const { data, isPending, error } = useVouchers(query)
 
   if (isPending) return <LoadingState />
-  if (error || !data) return <ErrorState message="Gagal memuat voucher." />
+  if (error || !data) return <ErrorState message="Gagal memuat daftar voucher." />
 
   const totalVouchers = data.meta?.total_items || data.data.length
   const claimedCount = data.data.filter((v) => v.status === 'USED' || v.status === 'ACTIVE').length
@@ -35,76 +59,67 @@ export function VouchersPage() {
 
   return (
     <div>
-      <WavyHeader
-        title="Manajemen Voucher"
-      />
+      <WavyHeader title="Manajemen Voucher" />
 
       <div className="stitch-page-stage">
-        {/* Telemetry KPI Cards with Stitch Progress Bars */}
+        {/* KPI Cards */}
         <KpiGrid columns={4}>
           <KpiCard
-            label="Total Voucher Dibuat"
+            label="Total Voucher"
             value={totalVouchers}
             icon={PlusCircle}
-            trend={{ label: 'Total Pool' }}
             progressBar={{ percent: 100, color: '#1d4ed8' }}
-            footerLeft="Penyimpanan Data Voucher"
-            footerRight="Active Tokens"
+            subtext="Seluruh kode voucher"
           />
 
           <KpiCard
-            label="Voucher Terpakai (Claimed)"
+            label="Voucher Terpakai"
             value={claimedCount}
             icon={CheckCircle2}
             iconBoxVariant="secondary"
-            trend={{ label: `${claimedPercent}% Claimed` }}
+            trend={{ label: `${claimedPercent}%` }}
             progressBar={{ percent: claimedPercent, color: '#00668a' }}
-            footerLeft="Tingkat utilisasi portal"
-            footerRight="Claimed Sessions"
+            subtext="Telah digunakan login"
           />
 
           <KpiCard
-            label="Voucher Sedang Aktif"
+            label="Sedang Aktif"
             value={activeCount}
             icon={Wifi}
             iconColor="#10b981"
             iconBoxVariant="success"
-            trend={{ label: 'Online Now', variant: 'success' }}
             progressBar={{
               percent: totalVouchers > 0 ? (activeCount / totalVouchers) * 100 : 0,
               color: '#10b981',
             }}
-            footerLeft="User sedang terkoneksi"
-            footerRight="MikroTik DHCP"
+            subtext="Sesi internet berjalan"
           />
 
           <KpiCard
-            label="Siap Pakai (Issued)"
+            label="Siap Pakai"
             value={issuedCount}
             icon={Archive}
-            trend={{ label: 'Menunggu Login' }}
             progressBar={{
               percent: totalVouchers > 0 ? (issuedCount / totalVouchers) * 100 : 0,
               color: '#545c72',
             }}
-            footerLeft="Belum digunakan"
-            footerRight="Stok Pool"
+            subtext="Belum digunakan"
           />
         </KpiGrid>
 
-        {/* Router Automated Voucher Policy Configuration */}
+        {/* Router Voucher Format Configuration */}
         <VoucherConfigCard />
 
         {/* Main Vouchers Table */}
         <DataTableCard
-          title="Daftar Token Voucher Hotspot & Riwayat Sesi"
+          title="Riwayat Voucher"
           icon={Ticket}
           toolbarActions={
             <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <SearchInput
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Cari username voucher..."
+                placeholder="Cari kode voucher..."
                 style={{ width: '220px' }}
               />
 
@@ -114,28 +129,27 @@ export function VouchersPage() {
                 style={{ padding: '0.65rem 0.85rem' }}
               >
                 <option value="">Semua Status</option>
-                <option value="ISSUED">Issued (Siap Pakai)</option>
-                <option value="ACTIVE">Active (Online)</option>
-                <option value="USED">Used (Selesai)</option>
-                <option value="EXPIRED">Expired</option>
+                <option value="ISSUED">Siap Pakai</option>
+                <option value="ACTIVE">Aktif</option>
+                <option value="USED">Selesai</option>
+                <option value="EXPIRED">Kedaluwarsa</option>
               </select>
             </div>
           }
         >
-
           {data.data.length ? (
             <>
               <div className="table-wrapper">
                 <table className="stitch-table">
                   <thead>
                     <tr>
-                      <th>Username Voucher</th>
-                      <th>Profil Paket Hotspot</th>
+                      <th>Kode Voucher</th>
+                      <th>Paket</th>
                       <th>Status</th>
-                      <th>Dibuat</th>
-                      <th>Kedaluwarsa</th>
-                      <th>Timeout Sesi</th>
-                      <th>Catatan / Peruntukan</th>
+                      <th>Waktu Dibuat</th>
+                      <th>Berlaku Sampai</th>
+                      <th>Durasi</th>
+                      <th>Keterangan</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -152,11 +166,11 @@ export function VouchersPage() {
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                               <strong style={{ fontSize: '13px', color: '#0b1c30' }}>
-                                {x.profile_name || 'Profil Standar'}
+                                {x.profile_name || 'Standar'}
                               </strong>
                               {x.bandwidth_down_kbps ? (
                                 <small style={{ color: '#065f46', fontWeight: 600 }}>
-                                  ↓ {Math.round(x.bandwidth_down_kbps / 1024)}M / ↑ {Math.round(x.bandwidth_up_kbps || 0) / 1024}M
+                                  ↓ {formatBwLabel(x.bandwidth_down_kbps)} / ↑ {formatBwLabel(x.bandwidth_up_kbps)}
                                 </small>
                               ) : null}
                             </div>
@@ -166,7 +180,7 @@ export function VouchersPage() {
                               variant={isActive ? 'active' : isIssued ? 'basic' : 'expired'}
                               dot={isActive}
                             >
-                              {x.status}
+                              {formatVoucherStatus(x.status)}
                             </StatusPill>
                           </td>
                           <td>{formatDate(x.created_at)}</td>
@@ -176,7 +190,27 @@ export function VouchersPage() {
                               {formatDuration(x.session_timeout_seconds)}
                             </span>
                           </td>
-                          <td>{x.note || '—'}</td>
+                          <td>
+                            {(() => {
+                              const rawNote = (x.note || '').trim()
+                              if (!rawNote || rawNote.toLowerCase() === 'issued by portal session') {
+                                return (
+                                  <span style={{ fontSize: '12px', color: '#475569' }}>
+                                    {x.expected_mac ? `Perangkat ${x.expected_mac}` : 'Pengunjung Wi-Fi'}
+                                  </span>
+                                )
+                              }
+                              const cleaned = rawNote
+                                .replace(/^Klaim Captive Portal\s*•\s*/i, '')
+                                .replace(/Skip Survey/gi, 'Tanpa Survei')
+                                .replace(/Isi Survey/gi, 'Isi Survei')
+                              return (
+                                <span style={{ fontSize: '12px', color: '#334155' }}>
+                                  {cleaned}
+                                </span>
+                              )
+                            })()}
+                          </td>
                         </tr>
                       )
                     })}
@@ -187,7 +221,7 @@ export function VouchersPage() {
             </>
           ) : (
             <div style={{ padding: '2rem' }}>
-              <EmptyState title="Belum ada voucher yang cocok dengan kriteria pencarian." />
+              <EmptyState title="Belum ada voucher yang sesuai pencarian." />
             </div>
           )}
         </DataTableCard>

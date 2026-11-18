@@ -67,6 +67,25 @@ func (h *AdminHandler) ListRouters(c *gin.Context) {
 	httpx.OK(c, "Routers retrieved", routers)
 }
 
+// CreateRouter registers a new MikroTik router and its RADIUS NAS client.
+func (h *AdminHandler) CreateRouter(c *gin.Context) {
+	var req dto.CreateRouterRequest
+	if !bindJSON(c, &req, "Invalid router payload") {
+		return
+	}
+	res, err := h.admin.CreateRouter(
+		c.Request.Context(),
+		middleware.AdminID(c),
+		middleware.AdminUsername(c),
+		req,
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.Created(c, "Router created successfully", res)
+}
+
 // UpdateRouterVoucherConfig updates the automated voucher generation settings for a MikroTik router.
 func (h *AdminHandler) UpdateRouterVoucherConfig(c *gin.Context) {
 	routerID := c.Param("id")

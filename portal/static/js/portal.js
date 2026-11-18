@@ -126,7 +126,6 @@
     paintCountdown();
     connectButtons.forEach(function (btn) {
       btn.disabled = true;
-      btn.textContent = "Tunggu " + secondsLeft + " detik...";
     });
     if (screens.ad) screens.ad.classList.remove("is-ready");
     window.clearTimeout(countdownTimer);
@@ -136,9 +135,6 @@
         secondsLeft -= 1;
         paintCountdown();
         if (secondsLeft > 0) {
-          connectButtons.forEach(function (btn) {
-            btn.textContent = "Tunggu " + secondsLeft + " detik...";
-          });
           countdownTimer = window.setTimeout(tick, 1000);
         } else {
           finishCountdown();
@@ -153,7 +149,6 @@
     if (screens.ad) screens.ad.classList.add("is-ready");
     connectButtons.forEach(function (btn) {
       btn.disabled = false;
-      btn.textContent = "Lanjutkan →";
     });
   }
 
@@ -232,9 +227,13 @@
       passwordField.value = window.md5Raw ? window.md5Raw(chapInput) : "";
 
       var dst = form.querySelector("[name=dst]");
-      if (dst && data.link_orig) dst.value = data.link_orig;
+      var finalDst = data.promo_url ? new URL(data.promo_url, window.location.origin).toString() : data.link_orig;
+      if (dst && finalDst) dst.value = finalDst;
     } else {
       passwordField.value = data.password;
+      var dstPap = form.querySelector("[name=dst]");
+      var finalDstPap = data.promo_url ? new URL(data.promo_url, window.location.origin).toString() : data.link_orig;
+      if (dstPap && finalDstPap) dstPap.value = finalDstPap;
     }
     form.submit();
   }
@@ -244,13 +243,76 @@
     setNotice(statusEl, "", "");
     connectButtons.forEach(function (btn) {
       btn.disabled = true;
-      btn.textContent = "Tunggu " + adDuration + " detik...";
     });
+    if (screens.ad) screens.ad.classList.remove("is-ready");
     applyAdLayout();
-    startCountdown();
+
+    var vid = document.getElementById("ad-video");
+    var img = document.getElementById("ad-image");
+    var labelEl = document.getElementById("ad-timer-label-text");
+    var started = false;
+
+    function beginTimerOnce() {
+      if (started) return;
+      started = true;
+      if (labelEl) {
+        labelEl.innerHTML = 'Sisa <strong id="countdown">' + adDuration + '</strong> dtk';
+        countdownEls = [
+          document.getElementById("countdown"),
+          document.getElementById("countdown-portrait")
+        ].filter(Boolean);
+      }
+      applyAdLayout();
+      startCountdown();
+    }
+
+    if (vid) {
+      if (labelEl) labelEl.textContent = "Memuat iklan...";
+      countdownEls.forEach(function (el) { el.textContent = "…"; });
+
+      var onReady = function () {
+        vid.removeEventListener("playing", onReady);
+        vid.removeEventListener("canplay", onReady);
+        beginTimerOnce();
+      };
+
+      if (vid.readyState >= 3) {
+        var p = vid.play();
+        if (p && typeof p.then === "function") {
+          p.then(beginTimerOnce).catch(beginTimerOnce);
+        } else {
+          beginTimerOnce();
+        }
+      } else {
+        vid.addEventListener("playing", onReady);
+        vid.addEventListener("canplay", onReady);
+        vid.addEventListener("error", beginTimerOnce, { once: true });
+        var playPromise = vid.play();
+        if (playPromise && typeof playPromise.catch === "function") {
+          playPromise.catch(function () {
+            // Autoplay fallback
+          });
+        }
+      }
+      return;
+    }
+
+    if (img) {
+      if (img.complete && img.naturalWidth > 0) {
+        beginTimerOnce();
+      } else {
+        if (labelEl) labelEl.textContent = "Memuat iklan...";
+        countdownEls.forEach(function (el) { el.textContent = "…"; });
+        img.addEventListener("load", beginTimerOnce, { once: true });
+        img.addEventListener("error", beginTimerOnce, { once: true });
+      }
+      return;
+    }
+
+    beginTimerOnce();
   }
 
-  // ---------- Ad layout: follows configuration from admin ----------
+  // ---------- Ad layout: follows configuration + natural media aspect ratio ----------
   function setAdLayout(mode) {
     var section = screens.ad;
     if (!section) return;
@@ -259,12 +321,22 @@
   }
 
   function applyAdLayout() {
+    var section = screens.ad;
+    var img = document.getElementById("ad-image");
+    var vid = document.getElementById("ad-video");
+    if (section) {
+      if (img && img.naturalWidth && img.naturalHeight) {
+        section.classList.toggle("is-landscape-media", img.naturalWidth >= img.naturalHeight);
+      } else if (vid && vid.videoWidth && vid.videoHeight) {
+        section.classList.toggle("is-landscape-media", vid.videoWidth >= vid.videoHeight);
+      }
+    }
     var mode = (cfg.adLayout || "").toLowerCase();
     if (mode === "portrait" || mode === "landscape") {
       setAdLayout(mode);
       return;
     }
-    if (screens.ad && screens.ad.classList.contains("ad-layout--portrait")) {
+    if (section && section.classList.contains("ad-layout--portrait")) {
       setAdLayout("portrait");
       return;
     }
@@ -273,6 +345,10 @@
 
   function watchAdImage() {
     var img = document.getElementById("ad-image");
+    var vid = document.getElementById("ad-video");
+    if (vid) {
+      vid.addEventListener("loadedmetadata", applyAdLayout);
+    }
     if (!img) {
       applyAdLayout();
       return;
@@ -303,8 +379,15 @@
     return date.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
   }
 
-  // ---------- Redirect countdown (connected -> Google) ----------
+  var lastPromoUrl = "";
+
+  // ---------- Redirect countdown (connected -> Promo or Google) ----------
   function redirectTarget() {
+    if (lastPromoUrl) {
+      try {
+        return new URL(lastPromoUrl, window.location.origin).toString();
+      } catch (e) { /* fallback */ }
+    }
     // MikroTik ngasih link-orig = halaman yang user mau buka sebelum kena portal.
     // Kalau ada, pakai itu; kalau enggak, fallback ke Google.
     var target = (cfg.linkOrig || "").trim ? (cfg.linkOrig || "").trim() : (cfg.linkOrig || "");
@@ -370,6 +453,11 @@
   }
 
   function showConnected(data) {
+    lastPromoUrl = (data && data.promo_url) ? data.promo_url : "";
+    var link = document.getElementById("redirect-now");
+    if (link) {
+      link.textContent = lastPromoUrl ? "Buka Halaman Promo" : "Mulai Browsing";
+    }
     showScreen("connected");
 
     var durationLabel = formatDuration(data && data.session_timeout_seconds);
@@ -389,7 +477,7 @@
     var profileEl = document.getElementById("conn-profile");
     if (profileEl) {
       var isPremium = (data && data.bandwidth_down_kbps) >= 3000;
-      profileEl.textContent = isPremium ? "Premium (Cepat)" : "Standar (Basic)";
+      profileEl.textContent = isPremium ? "Akses Cepat" : "Standar";
     }
 
     var expiryEl = document.getElementById("conn-expiry");
@@ -407,7 +495,7 @@
   function setSurveyBusy(busy, message) {
     if (surveySubmitBtn) {
       surveySubmitBtn.disabled = busy;
-      surveySubmitBtn.textContent = busy ? "Menghubungkan..." : "Dapatkan Akses Cepat & Hubungkan →";
+      surveySubmitBtn.textContent = busy ? "Menghubungkan..." : "Simpan & Hubungkan";
     }
     if (surveySkipBtn) {
       surveySkipBtn.disabled = busy;
@@ -421,18 +509,18 @@
 
   function submitSurveyAndConnect(skipped) {
     if (!sessionToken) {
-      setNotice(surveyStatus, "Sesi portal belum siap. Muat ulang halaman dan coba lagi.", "error");
+      setNotice(surveyStatus, "Sesi belum siap. Muat ulang halaman dan coba lagi.", "error");
       return;
     }
     var email = (surveyEmail && surveyEmail.value ? surveyEmail.value.trim() : "");
     var phone = (surveyPhone && surveyPhone.value ? surveyPhone.value.trim() : "");
 
     if (!skipped && !email && !phone) {
-      setNotice(surveyStatus, "Silakan isi Email atau Nomor WhatsApp untuk Akses Premium, atau klik Lewati di bawah.", "error");
+      setNotice(surveyStatus, "Silakan isi Email atau Nomor WhatsApp, atau pilih tombol Lewati di bawah.", "error");
       return;
     }
 
-    setSurveyBusy(true, skipped ? "Menyiapkan akses standar..." : "Menyiapkan akses Premium...");
+    setSurveyBusy(true, "Menghubungkan ke internet...");
 
     postJSON("/api/v1/portal-sessions/" + encodeURIComponent(sessionToken) + "/survey", {
       email: email,
@@ -485,18 +573,27 @@
       link_orig: cfg.linkOrig || "",
       chap_id: cfg.chapId || "",
       chap_challenge: cfg.chapChallenge || "",
-      nas_identifier: cfg.nasIdentifier || ""
+      nas_identifier: cfg.nasIdentifier || "",
+      advertisement_id: cfg.adId || ""
     })
       .then(function (data) {
+        if (data && data.auto_connect && data.connect_data) {
+          lastConnectHadHotspot = !!(data.connect_data && data.connect_data.link_login_only);
+          showConnected(data.connect_data);
+          if (data.connect_data.link_login_only) {
+            window.setTimeout(function () { submitToHotspot(data.connect_data); }, 600);
+          }
+          return;
+        }
         sessionToken = data.session_token;
         sessionReady = true;
         sessionFailed = false;
         adDuration = Number(data.ad_duration_seconds || adDuration);
         if (startButton && startRequested) {
           startButton.disabled = false;
-          startButton.textContent = "Mulai Sekarang";
+          startButton.textContent = "Hubungkan Sekarang";
         }
-        // If the user already tapped "Mulai Sekarang", advance now.
+        // If the user already tapped "Mulai Koneksi", advance now.
         if (startRequested) enterAdScreen();
       })
       .catch(function (error) {

@@ -2,32 +2,32 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   ArrowLeft,
+  CheckCircle2,
   Clock,
+  CloudUpload,
   Film,
-  Gauge,
   Image as ImageIcon,
   Play,
-  RefreshCw,
   RotateCcw,
   Save,
   Scissors,
   Smartphone,
-  Users,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { queryClient } from '@/app/query-client'
 import { ErrorState, LoadingState } from '@/components/feedback/query-state'
-import { KpiCard, KpiGrid, PresetInput, StatusPill, WavyHeader } from '@/components/ui'
+import { AdPortalPreview, PresetInput, WavyHeader } from '@/components/ui'
 import { advertisementsApi } from '@/features/advertisements/api/advertisements.api'
-import { advertisementsQueryKey } from '@/features/advertisements/hooks/use-advertisements'
+import { advertisementsQueryKey, useAdvertisements } from '@/features/advertisements/hooks/use-advertisements'
 import type { MediaMetadata } from '@/features/advertisements/types/advertisement.types'
+import { formatBytes } from '@/lib/formatters'
 
 const COUNTDOWN_PRESETS = [
   { label: '5 Detik', val: 5 },
   { label: '10 Detik', val: 10 },
-  { label: '15 Detik (Default)', val: 15 },
+  { label: '15 Detik', val: 15 },
   { label: '30 Detik', val: 30 },
 ]
 
@@ -36,7 +36,7 @@ export function AdvertisementFormPage() {
   const isEdit = Boolean(id)
   const navigate = useNavigate()
 
-  // Fetch existing ad if editing
+  const { data: allAds = [] } = useAdvertisements()
   const { data: existingAd, isPending: isFetching, error: fetchError } = useQuery({
     queryKey: [...advertisementsQueryKey, id],
     queryFn: () => advertisementsApi.get(id!),
@@ -50,12 +50,34 @@ export function AdvertisementFormPage() {
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image')
   const [layoutMode, setLayoutMode] = useState<'landscape' | 'portrait'>('landscape')
   const [durationSeconds, setDurationSeconds] = useState<number>(0)
-  const [sortOrder, setSortOrder] = useState<number>(0)
+  const [sortOrder, setSortOrder] = useState<number>(1)
   const [isActive, setIsActive] = useState(true)
+
+  useEffect(() => {
+    if (!isEdit && allAds.length > 0) {
+      const maxOrder = allAds.reduce((max, item) => (item.sort_order > max ? item.sort_order : max), 0)
+      setSortOrder(maxOrder + 1)
+    }
+  }, [isEdit, allAds])
 
   // Upload & Inspection State
   const [meta, setMeta] = useState<MediaMetadata | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadPercent, setUploadPercent] = useState<number>(0)
+  const [uploadedBytes, setUploadedBytes] = useState<number>(0)
+  const [totalBytes, setTotalBytes] = useState<number>(0)
+  const [uploadingFileName, setUploadingFileName] = useState<string>('')
+  const [uploadCompleted, setUploadCompleted] = useState<boolean>(false)
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string>('')
+  const localBlobRef = useRef<string>('')
+
+  useEffect(() => {
+    return () => {
+      if (localBlobRef.current) {
+        URL.revokeObjectURL(localBlobRef.current)
+      }
+    }
+  }, [])
 
   // Video Trimmer State (Start & End in seconds)
   const [videoStart, setVideoStart] = useState<number>(0)
@@ -63,7 +85,6 @@ export function AdvertisementFormPage() {
   const [videoCurrentTime, setVideoCurrentTime] = useState<number>(0)
   const videoPlayerRef = useRef<HTMLVideoElement>(null)
 
-  // Populate data when editing
   useEffect(() => {
     if (existingAd) {
       setTitle(existingAd.title || '')
@@ -80,10 +101,15 @@ export function AdvertisementFormPage() {
     }
   }, [existingAd])
 
-  // Inspect file dimensions & duration client-side before/during upload
   const inspectAndUploadFile = async (file: File) => {
     const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov|ogg)$/i.test(file.name)
+    if (localBlobRef.current) {
+      URL.revokeObjectURL(localBlobRef.current)
+    }
     const objURL = URL.createObjectURL(file)
+    localBlobRef.current = objURL
+    setLocalPreviewUrl(objURL)
+    setMediaType(isVideo ? 'video' : 'image')
 
     if (isVideo) {
       const vid = document.createElement('video')
@@ -96,13 +122,11 @@ export function AdvertisementFormPage() {
         const inspectedMeta: MediaMetadata = { width, height, duration, orientation, type: 'video' }
 
         setMeta(inspectedMeta)
-        setMediaType('video')
         setLayoutMode(orientation)
         const dur = duration > 0 ? duration : 15
         setDurationSeconds(dur)
         setVideoStart(0)
         setVideoEnd(dur)
-        URL.revokeObjectURL(objURL)
       }
       vid.src = objURL
     } else {
@@ -114,21 +138,32 @@ export function AdvertisementFormPage() {
         const inspectedMeta: MediaMetadata = { width, height, orientation, type: 'image' }
 
         setMeta(inspectedMeta)
-        setMediaType('image')
         setLayoutMode(orientation)
-        URL.revokeObjectURL(objURL)
       }
       img.src = objURL
     }
 
     try {
       setUploading(true)
-      const res = await advertisementsApi.uploadImage(file)
-      toast.success('File media berhasil diunggah')
+      setUploadCompleted(false)
+      setUploadingFileName(file.name)
+      setTotalBytes(file.size)
+      setUploadedBytes(0)
+      setUploadPercent(0)
+
+      const res = await advertisementsApi.uploadImage(file, (progress) => {
+        setUploadedBytes(progress.loaded)
+        setTotalBytes(progress.total)
+        setUploadPercent(progress.percent)
+      })
+      setUploadPercent(100)
+      setUploadCompleted(true)
+      toast.success('Berkas media berhasil diunggah')
       setImageUrl(res.url)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Gagal mengunggah media'
       toast.error(msg)
+      setUploadCompleted(false)
     } finally {
       setUploading(false)
     }
@@ -162,12 +197,17 @@ export function AdvertisementFormPage() {
   if (isEdit && (fetchError || !existingAd)) return <ErrorState message="Gagal memuat data iklan." />
 
   const mismatch = meta && meta.orientation !== layoutMode
+  const conflictingAd = allAds.find((item) => item.id !== id && item.sort_order === Number(sortOrder) && Number(sortOrder) > 0)
   const isSaving = createMutation.isPending || updateMutation.isPending
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) {
       toast.error('Judul iklan wajib diisi')
+      return
+    }
+    if (conflictingAd) {
+      toast.error(`Urutan #${sortOrder} sudah digunakan oleh iklan "${conflictingAd.title}". Silakan pilih nomor lain.`)
       return
     }
 
@@ -201,37 +241,11 @@ export function AdvertisementFormPage() {
       />
 
       <div className="stitch-page-stage">
-        {/* 3 Stitch Telemetry Overview Cards */}
-        <KpiGrid columns={3}>
-          <KpiCard
-            compact
-            label="Target Potensi Trafik"
-            value="± 15.000 Sesi / Minggu"
-            icon={Users}
-          />
-          <KpiCard
-            compact
-            label="Profil Queue MikroTik"
-            value="Dynamic QoS Rate-Limit"
-            icon={Gauge}
-            iconBoxVariant="secondary"
-          />
-          <KpiCard
-            compact
-            label="Sinkronisasi RADIUS"
-            value="Auto Hotspot Hook Active"
-            icon={RefreshCw}
-            iconColor="#10b981"
-            iconBoxVariant="success"
-          />
-        </KpiGrid>
-
-        {/* 7:5 Split Workspace Grid from Google Stitch */}
         <form onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1.75rem', alignItems: 'start' }}>
             {/* LEFT COLUMN: Form Cards */}
             <div style={{ display: 'grid', gap: '1.5rem' }}>
-              {/* Card 1: Informasi Dasar */}
+              {/* Card 1: Informasi Iklan */}
               <div className="stitch-card-container">
                 <div className="table-toolbar">
                   <div className="table-toolbar-title">
@@ -252,9 +266,9 @@ export function AdvertisementFormPage() {
                       01
                     </span>
                     <div>
-                      <h3 style={{ fontSize: '15px', margin: 0 }}>Informasi Dasar Sponsor &amp; Kampanye</h3>
+                      <h3 style={{ fontSize: '15px', margin: 0 }}>Informasi Iklan</h3>
                       <p style={{ fontSize: '12px', color: '#747686', margin: 0 }}>
-                        Detail brand sponsor dan teks pesan promosi untuk pengunjung.
+                        Judul dan keterangan singkat yang tampil pada layar iklan.
                       </p>
                     </div>
                   </div>
@@ -263,32 +277,30 @@ export function AdvertisementFormPage() {
                 <div style={{ padding: '1.4rem', display: 'grid', gap: '1.15rem' }}>
                   <div className="form-field">
                     <label>
-                      <span>Judul Kampanye Iklan <span style={{ color: '#ef4444' }}>*</span></span>
+                      <span>Judul Iklan <span style={{ color: '#ef4444' }}>*</span></span>
                     </label>
                     <input
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
-                      placeholder="Contoh: Promo Spesial Kopi Kenangan 50%"
+                      placeholder="Contoh: Promo Kopi Kenangan Diskon 50%"
                       required
                     />
-                    <span className="helper-text">Judul yang tampil mencolok di atas layar login captive portal.</span>
                   </div>
 
                   <div className="form-field">
-                    <label>Teks Keterangan &amp; Call-to-Action</label>
+                    <label>Deskripsi Singkat</label>
                     <textarea
                       rows={3}
                       value={body}
                       onChange={(e) => setBody(e.target.value)}
-                      placeholder="Contoh: Nikmati akses internet gratis dengan kecepatan tinggi. Tonton tayangan sponsor ini hingga selesai untuk klaim voucher."
+                      placeholder="Teks informasi singkat yang tampil di bagian bawah iklan (opsional)."
                       style={{ resize: 'vertical' }}
                     />
-                    <span className="helper-text">Pesan informasi yang menyertai tayangan iklan.</span>
                   </div>
                 </div>
               </div>
 
-              {/* Card 2: Media Asset Upload */}
+              {/* Card 2: Berkas Media */}
               <div className="stitch-card-container">
                 <div className="table-toolbar">
                   <div className="table-toolbar-title">
@@ -309,9 +321,9 @@ export function AdvertisementFormPage() {
                       02
                     </span>
                     <div>
-                      <h3 style={{ fontSize: '15px', margin: 0 }}>Upload File Media (Foto atau Video)</h3>
+                      <h3 style={{ fontSize: '15px', margin: 0 }}>Berkas Media</h3>
                       <p style={{ fontSize: '12px', color: '#747686', margin: 0 }}>
-                        Pilih berkas media untuk otomatis dideteksi resolusi dan orientasinya.
+                        Unggah gambar atau video yang akan ditayangkan.
                       </p>
                     </div>
                   </div>
@@ -345,32 +357,109 @@ export function AdvertisementFormPage() {
                         <Film size={26} />
                       </div>
                       <strong style={{ fontSize: '14px', color: '#0b1c30' }}>
-                        {uploading ? 'Mengunggah & Menginspeksi Media...' : 'Klik untuk Memilih File Foto atau Video'}
+                        {uploading ? 'Mengunggah Berkas...' : 'Klik untuk Memilih Gambar atau Video'}
                       </strong>
                       <span className="helper-text">
-                        Mendukung Gambar (JPG, PNG, WEBP maks 10MB) dan Video (MP4, WEBM maks 50MB).
+                        Format gambar: JPG, PNG, WebP (maks. 10 MB) • Video: MP4, WebM (maks. 50 MB)
                       </span>
                     </div>
                   </div>
 
-                  {uploading && (
-                    <div style={{ textAlign: 'center', padding: '0.5rem', color: '#1d4ed8', fontSize: '13px' }}>
-                      Sedang mengunggah berkas ke server...
+                  {(uploading || uploadCompleted) && (
+                    <div
+                      style={{
+                        background: uploadCompleted ? '#f0fdf4' : '#f8fbff',
+                        border: uploadCompleted ? '1px solid #86efac' : '1px solid #93c5fd',
+                        borderRadius: '12px',
+                        padding: '1rem 1.15rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.6rem',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', minWidth: 0 }}>
+                          {uploadCompleted ? (
+                            <CheckCircle2 size={18} color="#16a34a" style={{ flexShrink: 0 }} />
+                          ) : (
+                            <CloudUpload size={18} color="#2563eb" className="animate-bounce" style={{ flexShrink: 0 }} />
+                          )}
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                color: uploadCompleted ? '#166534' : '#0f172a',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {uploadingFileName || 'Berkas Media'}
+                            </div>
+                            <div style={{ fontSize: '11px', color: uploadCompleted ? '#15803d' : '#475569' }}>
+                              {uploadCompleted
+                                ? `Berhasil diunggah (${formatBytes(totalBytes)})`
+                                : uploadPercent < 100
+                                  ? `Mengunggah... ${formatBytes(uploadedBytes)} dari ${formatBytes(totalBytes)}`
+                                  : 'Menyelesaikan penyimpanan berkas...'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 800,
+                            fontFamily: 'monospace',
+                            color: uploadCompleted ? '#166534' : '#1d4ed8',
+                            background: uploadCompleted ? '#dcfce7' : '#dbeafe',
+                            padding: '3px 9px',
+                            borderRadius: '999px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {uploadCompleted ? '100%' : `${uploadPercent}%`}
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '9px',
+                          borderRadius: '999px',
+                          background: uploadCompleted ? '#dcfce7' : '#e2e8f0',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${uploadCompleted ? 100 : uploadPercent}%`,
+                            height: '100%',
+                            borderRadius: '999px',
+                            background: uploadCompleted
+                              ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                              : 'linear-gradient(90deg, #3b82f6, #1d4ed8)',
+                            transition: 'width 0.2s ease-out',
+                          }}
+                        />
+                      </div>
                     </div>
                   )}
 
                   {meta && (
                     <div style={{ background: '#eff4ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '0.85rem', fontSize: '12px', color: '#1e3a8a', display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
-                      <span><strong>Format:</strong> {meta.type.toUpperCase()}</span>
-                      <span><strong>Dimensi:</strong> {meta.width} × {meta.height} px</span>
-                      <span><strong>Orientasi:</strong> {meta.orientation.toUpperCase()}</span>
-                      {meta.duration ? <span><strong>Panjang Asli Video:</strong> {meta.duration}s</span> : null}
+                      <span><strong>Jenis:</strong> {meta.type === 'video' ? 'Video' : 'Gambar'}</span>
+                      <span><strong>Resolusi:</strong> {meta.width} × {meta.height} px</span>
+                      <span><strong>Orientasi:</strong> {meta.orientation === 'portrait' ? 'Portrait' : 'Landscape'}</span>
+                      {meta.duration ? <span><strong>Durasi Video:</strong> {meta.duration} dtk</span> : null}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Card 3: Layout & Countdown Duration */}
+              {/* Card 3: Tampilan & Durasi Tayang */}
               <div className="stitch-card-container">
                 <div className="table-toolbar">
                   <div className="table-toolbar-title">
@@ -391,9 +480,9 @@ export function AdvertisementFormPage() {
                       03
                     </span>
                     <div>
-                      <h3 style={{ fontSize: '15px', margin: 0 }}>Orientasi Layar &amp; Waktu Hitung Mundur</h3>
+                      <h3 style={{ fontSize: '15px', margin: 0 }}>Tampilan &amp; Durasi Tayang</h3>
                       <p style={{ fontSize: '12px', color: '#747686', margin: 0 }}>
-                        Atur mode tampilan portal dan berapa detik user wajib menonton iklan.
+                        Atur orientasi layar dan lama waktu penayangan iklan.
                       </p>
                     </div>
                   </div>
@@ -401,7 +490,7 @@ export function AdvertisementFormPage() {
 
                 <div style={{ padding: '1.4rem', display: 'grid', gap: '1.25rem' }}>
                   <div className="form-field">
-                    <label>Mode Tampilan Layar Captive Portal</label>
+                    <label>Orientasi Tampilan</label>
                     <div style={{ display: 'flex', gap: '1rem', marginTop: '0.25rem' }}>
                       <label
                         style={{
@@ -424,7 +513,7 @@ export function AdvertisementFormPage() {
                           checked={layoutMode === 'landscape'}
                           onChange={() => setLayoutMode('landscape')}
                         />
-                        <span>Landscape (Mendatar)</span>
+                        <span>Landscape</span>
                       </label>
 
                       <label
@@ -448,7 +537,7 @@ export function AdvertisementFormPage() {
                           checked={layoutMode === 'portrait'}
                           onChange={() => setLayoutMode('portrait')}
                         />
-                        <span>Portrait (Tegak)</span>
+                        <span>Portrait</span>
                       </label>
                     </div>
                   </div>
@@ -457,7 +546,7 @@ export function AdvertisementFormPage() {
                     <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', padding: '0.85rem', display: 'flex', gap: '0.75rem', fontSize: '12px', color: '#92400e' }}>
                       <AlertTriangle size={18} style={{ color: '#d97706', flexShrink: 0 }} />
                       <div>
-                        <strong>Peringatan Orientasi:</strong> File berorientasi <strong>{meta?.orientation}</strong> ({meta?.width}×{meta?.height} px) namun mode tampilan dipilih <strong>{layoutMode}</strong>.
+                        <strong>Orientasi Berbeda:</strong> Berkas berukuran <strong>{meta?.orientation}</strong> ({meta?.width}×{meta?.height} px) tetapi orientasi dipilih <strong>{layoutMode}</strong>.
                         <div style={{ marginTop: '0.4rem' }}>
                           <button
                             type="button"
@@ -465,7 +554,7 @@ export function AdvertisementFormPage() {
                             style={{ background: '#d97706', color: '#fff', borderColor: '#b45309' }}
                             onClick={() => setLayoutMode(meta!.orientation)}
                           >
-                            Ubah Otomatis ke {meta?.orientation === 'landscape' ? 'Landscape' : 'Portrait'}
+                            Sesuaikan ke {meta?.orientation === 'landscape' ? 'Landscape' : 'Portrait'}
                           </button>
                         </div>
                       </div>
@@ -478,15 +567,14 @@ export function AdvertisementFormPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <Scissors size={18} style={{ color: '#1d4ed8' }} />
                           <strong style={{ fontSize: '14px', color: '#0b1c30' }}>
-                            Pemotong Durasi Video (Start &amp; End Time)
+                            Batas Waktu Putar Video
                           </strong>
                         </div>
                         <span className="live-badge" style={{ fontSize: '12px' }}>
-                          Total Durasi: {durationSeconds} Detik
+                          Durasi: {durationSeconds} Detik
                         </span>
                       </div>
 
-                      {/* Video Player Preview with Trimmer Controls */}
                       <div style={{ background: '#000', borderRadius: '8px', overflow: 'hidden', maxHeight: '240px', display: 'flex', justifyContent: 'center' }}>
                         <video
                           ref={videoPlayerRef}
@@ -506,8 +594,8 @@ export function AdvertisementFormPage() {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                         <div className="form-field">
                           <label>
-                            <span>Waktu Mulai (Detik)</span>
-                            <span className="live-badge">{videoStart}s</span>
+                            <span>Detik Mulai</span>
+                            <span className="live-badge">{videoStart} dtk</span>
                           </label>
                           <div style={{ display: 'flex', gap: '0.5rem' }}>
                             <input
@@ -533,17 +621,16 @@ export function AdvertisementFormPage() {
                                   setDurationSeconds(Math.max(1, Math.round(videoEnd - cur)))
                                 }
                               }}
-                              title="Gunakan posisi pemutaran video saat ini"
                             >
-                              Gunakan Posisi
+                              Ambil Posisi
                             </button>
                           </div>
                         </div>
 
                         <div className="form-field">
                           <label>
-                            <span>Waktu Berhenti (Detik)</span>
-                            <span className="live-badge">{videoEnd}s</span>
+                            <span>Detik Selesai</span>
+                            <span className="live-badge">{videoEnd} dtk</span>
                           </label>
                           <div style={{ display: 'flex', gap: '0.5rem' }}>
                             <input
@@ -569,9 +656,8 @@ export function AdvertisementFormPage() {
                                   setDurationSeconds(Math.max(1, Math.round(cur - videoStart)))
                                 }
                               }}
-                              title="Gunakan posisi pemutaran video saat ini"
                             >
-                              Gunakan Posisi
+                              Ambil Posisi
                             </button>
                           </div>
                         </div>
@@ -590,7 +676,7 @@ export function AdvertisementFormPage() {
                           }}
                         >
                           <Play size={14} />
-                          Tes Putar Sesuai Potongan ({videoStart}s - {videoEnd}s)
+                          Putar Pratinjau ({videoStart}s - {videoEnd}s)
                         </button>
                         <button
                           type="button"
@@ -607,157 +693,85 @@ export function AdvertisementFormPage() {
                           }}
                         >
                           <RotateCcw size={14} />
-                          Reset
+                          Atur Ulang
                         </button>
                       </div>
                     </div>
                   ) : (
                     <PresetInput
-                      label="Durasi Tampil Iklan Foto (Detik)"
+                      label="Durasi Tampil Iklan (Detik)"
                       icon={Clock}
                       iconColor="#00668a"
                       value={durationSeconds}
                       onChange={setDurationSeconds}
-                      badgeText={durationSeconds > 0 ? `${durationSeconds} detik` : 'Default (15 dtk)'}
-                      helperText="Berapa lama pengunjung wajib melihat gambar sebelum tombol Skip / Klaim aktif."
+                      badgeText={durationSeconds > 0 ? `${durationSeconds} detik` : '15 detik'}
+                      helperText="Lama waktu penayangan iklan sebelum tombol lanjutkan muncul."
                       presets={COUNTDOWN_PRESETS}
                       min={0}
                       max={300}
                     />
                   )}
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '0.5rem', borderTop: '1px solid #f1f5f9' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '13px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={isActive}
-                        onChange={(e) => setIsActive(e.target.checked)}
-                      />
-                      <span><strong>Publikasikan Sekarang (Iklan Aktif)</strong></span>
-                    </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid #f1f5f9' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '13px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={isActive}
+                          onChange={(e) => setIsActive(e.target.checked)}
+                        />
+                        <span><strong>Tampilkan Iklan Ini (Aktif)</strong></span>
+                      </label>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '12px', color: '#747686' }}>
-                      <span>Prioritas:</span>
-                      <input
-                        type="number"
-                        style={{ width: '65px', padding: '0.35rem' }}
-                        value={sortOrder}
-                        onChange={(e) => setSortOrder(Number(e.target.value) || 0)}
-                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '12px', color: '#747686' }}>
+                        <span>Urutan Tayang:</span>
+                        <input
+                          type="number"
+                          min={1}
+                          style={{
+                            width: '72px',
+                            padding: '0.35rem 0.5rem',
+                            border: conflictingAd ? '2px solid #dc2626' : '1px solid #cbd5e1',
+                            borderRadius: '6px',
+                            fontWeight: 700,
+                          }}
+                          value={sortOrder}
+                          onChange={(e) => setSortOrder(Math.max(1, Number(e.target.value) || 1))}
+                        />
+                      </div>
                     </div>
+
+                    {conflictingAd && (
+                      <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '0.5rem 0.75rem', borderRadius: '8px' }}>
+                        Urutan <strong>#{sortOrder}</strong> sudah digunakan oleh iklan <strong>&ldquo;{conflictingAd.title}&rdquo;</strong>. Silakan pilih nomor lain.
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* RIGHT COLUMN: Live Smartphone Simulator from Google Stitch */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* RIGHT COLUMN: Realistic Desktop / Smartphone Preview */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', position: 'sticky', top: '84px' }}>
               <div className="stitch-card-container" style={{ padding: '1.4rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <h3 style={{ fontSize: '14px', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <div style={{ marginBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '15px', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <Smartphone size={18} style={{ color: '#1d4ed8' }} />
-                    Live Preview Captive Portal
+                    Pratinjau Tampilan
                   </h3>
-                  <StatusPill variant="active" dot>Simulasi HP</StatusPill>
+                  <p style={{ margin: '0.2rem 0 0', fontSize: '12px', color: '#64748b' }}>
+                    Menyesuaikan ukuran desktop (16:9) untuk landscape dan layar ponsel (9:16) untuk portrait.
+                  </p>
                 </div>
 
-                {/* Smartphone Mockup Frame */}
-                <div
-                  style={{
-                    margin: '0 auto',
-                    width: layoutMode === 'portrait' ? '280px' : '320px',
-                    borderRadius: '24px',
-                    border: '8px solid #0f172a',
-                    background: '#f8fafc',
-                    boxShadow: '0 12px 30px rgba(0,0,0,0.15)',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    transition: 'all 0.3s ease',
-                  }}
-                >
-                  {/* Speaker Notch */}
-                  <div style={{ height: '18px', background: '#0f172a', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div style={{ width: '40px', height: '4px', borderRadius: '4px', background: '#334155' }}></div>
-                  </div>
-
-                  {/* Media Container in Portal */}
-                  <div
-                    style={{
-                      height: layoutMode === 'portrait' ? '280px' : '180px',
-                      background: '#020617',
-                      position: 'relative',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {mediaType === 'video' ? (
-                      <video
-                        src={imageUrl}
-                        autoPlay
-                        muted
-                        loop
-                        playsInline
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <img
-                        src={imageUrl}
-                        alt="Simulator"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    )}
-
-                    {/* Countdown Badge overlay */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '8px',
-                        right: '8px',
-                        background: 'rgba(15, 23, 42, 0.85)',
-                        backdropFilter: 'blur(4px)',
-                        color: '#fff',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        padding: '3px 8px',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                      }}
-                    >
-                      <Clock size={11} /> {durationSeconds > 0 ? durationSeconds : 15}s
-                    </div>
-                  </div>
-
-                  {/* Portal Bottom Content */}
-                  <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#0b1c30', lineHeight: 1.3 }}>
-                      {title || 'Judul Iklan Sponsor'}
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#64748b', lineHeight: 1.4 }}>
-                      {body || 'Teks deskripsi sponsor tayang di sini saat pengunjung mengakses WiFi.'}
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled
-                      style={{
-                        marginTop: '0.4rem',
-                        background: '#1d4ed8',
-                        color: '#fff',
-                        padding: '0.5rem',
-                        fontSize: '12px',
-                        borderRadius: '8px',
-                        opacity: 0.9,
-                      }}
-                    >
-                      Hubungkan ke Internet
-                    </button>
-                  </div>
-                </div>
+                <AdPortalPreview
+                  title={title}
+                  body={body}
+                  mediaUrl={localPreviewUrl || imageUrl}
+                  mediaType={mediaType}
+                  layoutMode={layoutMode}
+                  durationSeconds={durationSeconds > 0 ? durationSeconds : 15}
+                />
               </div>
 
               {/* Action Buttons */}
@@ -770,7 +784,7 @@ export function AdvertisementFormPage() {
                     style={{ padding: '0.85rem' }}
                   >
                     <Save size={18} />
-                    {isSaving ? 'Menyimpan Materi Iklan...' : isEdit ? 'Simpan Perubahan' : 'Terbitkan Iklan'}
+                    {isSaving ? 'Menyimpan...' : isEdit ? 'Simpan Perubahan' : 'Terbitkan Iklan'}
                   </button>
 
                   <Link

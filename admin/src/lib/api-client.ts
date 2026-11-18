@@ -28,6 +28,11 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     credentials: 'include',
     headers: { Accept: 'application/json', ...init.headers },
   })
+
+  if (response.status === 204) {
+    return { data: undefined as T }
+  }
+
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null
 
   if (!response.ok || !payload?.success) {

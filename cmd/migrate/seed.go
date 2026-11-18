@@ -19,6 +19,10 @@ import (
 func seed(ctx context.Context, cfg *config.Config, db *gorm.DB) error {
 	now := time.Now().UTC()
 
+	if err := ensureRoles(ctx, db, now); err != nil {
+		return err
+	}
+
 	admin, err := ensureAdmin(ctx, cfg, db, now)
 	if err != nil {
 		return err
@@ -42,7 +46,249 @@ func seed(ctx context.Context, cfg *config.Config, db *gorm.DB) error {
 		return err
 	}
 
+	if err := ensureConnectProfiles(ctx, db, now); err != nil {
+		return err
+	}
+
+	if err := ensureMarketplaceDefaults(ctx, db, now); err != nil {
+		return err
+	}
+
 	fmt.Printf("seed: admin=%s site=%s router=%s\n", admin.Username, site.Name, router.Name)
+	return nil
+}
+
+func ensureMarketplaceDefaults(ctx context.Context, db *gorm.DB, now time.Time) error {
+	// 1. Seed default Location Tiers (1.0x, 1.2x, 1.5x)
+	tiers := []model.LocationTier{
+		{
+			Base:                model.Base{ID: uuid.NewString(), CreatedAt: now, UpdatedAt: now},
+			Name:                "Standard",
+			Multiplier:          1.0,
+			MinDailyConnects:    0,
+			MinDailyImpressions: 0,
+			Description:         "Lokasi reguler dengan trafik harian stabil.",
+			SortOrder:           1,
+			IsActive:            true,
+		},
+		{
+			Base:                model.Base{ID: uuid.NewString(), CreatedAt: now, UpdatedAt: now},
+			Name:                "Strategis",
+			Multiplier:          1.2,
+			MinDailyConnects:    30,
+			MinDailyImpressions: 25,
+			Description:         "Kafe atau area komersial dengan pengunjung menengah-tinggi.",
+			SortOrder:           2,
+			IsActive:            true,
+		},
+		{
+			Base:                model.Base{ID: uuid.NewString(), CreatedAt: now, UpdatedAt: now},
+			Name:                "Premium",
+			Multiplier:          1.5,
+			MinDailyConnects:    80,
+			MinDailyImpressions: 70,
+			Description:         "Lokasi unggulan dengan keramaian tinggi dan jam sibuk padat.",
+			SortOrder:           3,
+			IsActive:            true,
+		},
+	}
+
+	var standardTierID string
+	for _, t := range tiers {
+		var existing model.LocationTier
+		err := db.WithContext(ctx).Where("LOWER(name) = LOWER(?)", t.Name).First(&existing).Error
+		if err == nil {
+			if standardTierID == "" {
+				standardTierID = existing.ID
+			}
+			if existing.MinDailyConnects == 0 && t.MinDailyConnects > 0 {
+				_ = db.WithContext(ctx).Model(&model.LocationTier{}).Where("id = ?", existing.ID).Updates(map[string]any{
+					"min_daily_connects":    t.MinDailyConnects,
+					"min_daily_impressions": t.MinDailyImpressions,
+				}).Error
+			}
+			continue
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		item := t
+		if err := db.WithContext(ctx).Create(&item).Error; err != nil {
+			return err
+		}
+		if standardTierID == "" {
+			standardTierID = item.ID
+		}
+	}
+
+	// Attach standard tier & active status to existing routers/ads if unset
+	if standardTierID != "" {
+		_ = db.WithContext(ctx).Model(&model.Router{}).Where("location_tier_id IS NULL").Update("location_tier_id", standardTierID)
+	}
+	_ = db.WithContext(ctx).Model(&model.Advertisement{}).Where("status = '' OR status IS NULL").Update("status", model.AdStatusActive)
+
+	// 2. Seed global PlatformAdSetting (default Rp 50 per tayang, max 30s, require approval)
+	var settingCount int64
+	if err := db.WithContext(ctx).Model(&model.PlatformAdSetting{}).Count(&settingCount).Error; err != nil {
+		return err
+	}
+	if settingCount == 0 {
+		setting := model.PlatformAdSetting{
+			Base:                       model.Base{ID: uuid.NewString(), CreatedAt: now, UpdatedAt: now},
+			BasePriceImageIDR:          50,
+			BasePriceVideoIDR:          50,
+			MaxAdDurationSeconds:       30,
+			MinTopupAmountIDR:          50000,
+			DefaultPartnerSharePercent: 20,
+			MinWithdrawalAmountIDR:     50000,
+			RequireAdApproval:          true,
+		}
+		if err := db.WithContext(ctx).Create(&setting).Error; err != nil {
+			return err
+		}
+	} else {
+		_ = db.WithContext(ctx).Model(&model.PlatformAdSetting{}).
+			Where("default_partner_share_percent <= 0").
+			Update("default_partner_share_percent", 20).Error
+		_ = db.WithContext(ctx).Model(&model.PlatformAdSetting{}).
+			Where("min_withdrawal_amount_idr <= 0").
+			Update("min_withdrawal_amount_idr", 50000).Error
+	}
+
+	// 3. Seed one starter PaymentMethod if none exists
+	var pmCount int64
+	if err := db.WithContext(ctx).Model(&model.PaymentMethod{}).Count(&pmCount).Error; err != nil {
+		return err
+	}
+	if pmCount == 0 {
+		pm := model.PaymentMethod{
+			Base:          model.Base{ID: uuid.NewString(), CreatedAt: now, UpdatedAt: now},
+			Type:          model.PaymentMethodBankTransfer,
+			ProviderName:  "Bank BCA",
+			AccountNumber: "1234567890",
+			AccountHolder: "PT AdWave WiFi Indonesia",
+			Instructions:  "Transfer sesuai nominal tagihan lalu unggah foto bukti pembayaran.",
+			SortOrder:     1,
+			IsActive:      true,
+		}
+		if err := db.WithContext(ctx).Create(&pm).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func ensureRoles(ctx context.Context, db *gorm.DB, now time.Time) error {
+	defaults := []model.Role{
+		{
+			Base: model.Base{
+				ID:        uuid.NewString(),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			Name:        "admin",
+			DisplayName: "Super Administrator",
+			Description: "Akses penuh ke seluruh fitur sistem, konfigurasi router, dan manajemen RBAC.",
+			Permissions: "dashboard:view,routers:view,routers:create,routers:edit,routers:delete,profiles:view,profiles:create,profiles:edit,profiles:delete,advertisements:view,advertisements:create,advertisements:edit,advertisements:delete,marketplace:view,marketplace:moderate,marketplace:settings,partners:view,partners:manage,finance:view,vouchers:view,vouchers:create,vouchers:edit,vouchers:delete,visitors:view,visitors:delete,users:view,users:create,users:edit,users:delete,roles:view,roles:create,roles:edit,roles:delete",
+			IsSystem:    true,
+		},
+		{
+			Base: model.Base{
+				ID:        uuid.NewString(),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			Name:        "operator",
+			DisplayName: "Operator / Teknisi NOC",
+			Description: "Monitoring router MikroTik, manajemen voucher, dan pantau pengunjung.",
+			Permissions: "dashboard:view,routers:view,routers:edit,profiles:view,vouchers:view,vouchers:create,vouchers:edit,visitors:view",
+			IsSystem:    false,
+		},
+		{
+			Base: model.Base{
+				ID:        uuid.NewString(),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			Name:        "marketing",
+			DisplayName: "Tim Marketing & Iklan",
+			Description: "Kelola materi iklan sponsor captive portal dan lihat data leads pengunjung.",
+			Permissions: "dashboard:view,advertisements:view,advertisements:create,advertisements:edit,advertisements:delete,visitors:view",
+			IsSystem:    false,
+		},
+	}
+
+	for _, r := range defaults {
+		var existing model.Role
+		err := db.WithContext(ctx).Where("LOWER(name) = LOWER(?)", r.Name).First(&existing).Error
+		if err == nil {
+			if existing.IsSystem && r.Name == "admin" && existing.Permissions != r.Permissions {
+				_ = db.WithContext(ctx).Model(&model.Role{}).Where("id = ?", existing.ID).Update("permissions", r.Permissions).Error
+			}
+			continue
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		item := r
+		if err := db.WithContext(ctx).Create(&item).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ensureConnectProfiles(ctx context.Context, db *gorm.DB, now time.Time) error {
+	defaults := []model.ConnectProfile{
+		{
+			Base: model.Base{
+				ID:        uuid.NewString(),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			Name:                  "basic",
+			DisplayName:           "Basic",
+			Description:           "User yang skip survey. Bandwidth terbatas.",
+			IsDefault:             true,
+			BandwidthUpKbps:       512,
+			BandwidthDownKbps:     1024,
+			SessionTimeoutSeconds: 1800,
+			VoucherTTLSeconds:     300,
+			IsActive:              true,
+		},
+		{
+			Base: model.Base{
+				ID:        uuid.NewString(),
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			Name:                  "premium",
+			DisplayName:           "Premium",
+			Description:           "User yang isi survey. Bandwidth lebih tinggi.",
+			IsDefault:             false,
+			BandwidthUpKbps:       2048,
+			BandwidthDownKbps:     5120,
+			SessionTimeoutSeconds: 7200,
+			VoucherTTLSeconds:     300,
+			IsActive:              true,
+		},
+	}
+
+	for _, p := range defaults {
+		var existing model.ConnectProfile
+		err := db.WithContext(ctx).Where("name = ?", p.Name).First(&existing).Error
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		item := p
+		if err := db.WithContext(ctx).Create(&item).Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

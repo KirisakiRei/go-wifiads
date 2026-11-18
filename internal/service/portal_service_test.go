@@ -142,6 +142,17 @@ func (v *fakeVoucherRepo) UpdateStatus(ctx context.Context, id, s string) error 
 	}
 	return nil
 }
+func (v *fakeVoucherRepo) ActivateSessionWindow(ctx context.Context, id string, at time.Time, expiresAt time.Time) error {
+	if val, ok := v.fake.vouchers[id]; ok {
+		val.Status = model.VoucherStatusActive
+		val.UsedAt = &at
+		val.ExpiresAt = expiresAt
+	}
+	return nil
+}
+func (v *fakeVoucherRepo) DeactivateOtherActiveByMAC(ctx context.Context, mac, keepVoucherID string, at time.Time) error {
+	return nil
+}
 func (v *fakeVoucherRepo) MarkUsed(ctx context.Context, id string, t time.Time) error {
 	if val, ok := v.fake.vouchers[id]; ok {
 		val.Status = model.VoucherStatusUsed
@@ -194,7 +205,13 @@ func (f *fakeVisitorRepo) AttachVoucher(ctx context.Context, psid, vid, u string
 func (f *fakeVisitorRepo) MarkConnected(ctx context.Context, u string, t time.Time) error {
 	return nil
 }
+func (f *fakeVisitorRepo) MarkInterim(ctx context.Context, u string, t time.Time, s int64) error {
+	return nil
+}
 func (f *fakeVisitorRepo) MarkDisconnected(ctx context.Context, u string, t time.Time, s int64) error {
+	return nil
+}
+func (f *fakeVisitorRepo) CloseOtherActiveByMAC(ctx context.Context, mac, keepUsername string, at time.Time) error {
 	return nil
 }
 func (f *fakeVisitorRepo) MarkStale(ctx context.Context, u string) error { return nil }
@@ -208,6 +225,10 @@ func (f *fakeVisitorRepo) CountByStatus(ctx context.Context) (map[string]int64, 
 type fakeRouterRepo struct{ router model.Router }
 
 func (f *fakeRouterRepo) Create(ctx context.Context, r *model.Router) error { return nil }
+func (f *fakeRouterRepo) Update(ctx context.Context, r *model.Router) error {
+	f.router = *r
+	return nil
+}
 func (f *fakeRouterRepo) FindByID(ctx context.Context, id string) (*model.Router, error) {
 	return &f.router, nil
 }

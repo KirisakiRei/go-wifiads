@@ -108,6 +108,29 @@ func (r *voucherRepository) UpdateStatus(ctx context.Context, id, status string)
 		Update("status", status).Error
 }
 
+func (r *voucherRepository) ActivateSessionWindow(ctx context.Context, id string, at time.Time, expiresAt time.Time) error {
+	return r.db.WithContext(ctx).Model(&model.Voucher{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"status":     model.VoucherStatusActive,
+			"used_at":    at,
+			"expires_at": expiresAt,
+		}).Error
+}
+
+func (r *voucherRepository) DeactivateOtherActiveByMAC(ctx context.Context, mac, keepVoucherID string, at time.Time) error {
+	norm := utils.NormalizeMAC(mac)
+	if norm == "" {
+		return nil
+	}
+	return r.db.WithContext(ctx).Model(&model.Voucher{}).
+		Where("expected_mac = ? AND id <> ? AND status IN ?", norm, keepVoucherID, []string{model.VoucherStatusActive, model.VoucherStatusIssued}).
+		Updates(map[string]any{
+			"status":  model.VoucherStatusUsed,
+			"used_at": at,
+		}).Error
+}
+
 func (r *voucherRepository) MarkUsed(ctx context.Context, id string, at time.Time) error {
 	return r.db.WithContext(ctx).Model(&model.Voucher{}).
 		Where("id = ?", id).

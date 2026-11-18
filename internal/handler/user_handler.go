@@ -1,16 +1,15 @@
 package handler
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 
 	"wifiads/internal/dto"
+	"wifiads/internal/middleware"
 	"wifiads/internal/service"
 	"wifiads/pkg/httpx"
 )
 
-// UserHandler handles admin account management.
+// UserHandler handles admin account and RBAC role management.
 type UserHandler struct {
 	users service.UserService
 }
@@ -78,7 +77,20 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	httpx.OK(c, "Password changed", nil)
+	httpx.OK(c, "Kata sandi berhasil diperbarui", nil)
+}
+
+// ChangeOwnPassword updates the currently authenticated admin user's password.
+func (h *UserHandler) ChangeOwnPassword(c *gin.Context) {
+	var req dto.ChangePasswordRequest
+	if !bindJSON(c, &req, "Data kata sandi tidak valid") {
+		return
+	}
+	if err := h.users.ChangePassword(c.Request.Context(), middleware.AdminID(c), req); err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Kata sandi berhasil diperbarui", nil)
 }
 
 // Delete removes an admin user account.
@@ -87,5 +99,52 @@ func (h *UserHandler) Delete(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.Status(http.StatusNoContent)
+	httpx.OK(c, "User deleted", nil)
+}
+
+// ListRoles returns all RBAC roles and their permissions.
+func (h *UserHandler) ListRoles(c *gin.Context) {
+	items, err := h.users.ListRoles(c.Request.Context())
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Roles retrieved", items)
+}
+
+// CreateRole creates a new RBAC role.
+func (h *UserHandler) CreateRole(c *gin.Context) {
+	var req dto.CreateRoleRequest
+	if !bindJSON(c, &req, "Invalid role payload") {
+		return
+	}
+	item, err := h.users.CreateRole(c.Request.Context(), req)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.Created(c, "Role created", item)
+}
+
+// UpdateRole updates an existing RBAC role's permissions and metadata.
+func (h *UserHandler) UpdateRole(c *gin.Context) {
+	var req dto.UpdateRoleRequest
+	if !bindJSON(c, &req, "Invalid role update payload") {
+		return
+	}
+	item, err := h.users.UpdateRole(c.Request.Context(), c.Param("id"), req)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Role updated", item)
+}
+
+// DeleteRole deletes a custom RBAC role.
+func (h *UserHandler) DeleteRole(c *gin.Context) {
+	if err := h.users.DeleteRole(c.Request.Context(), c.Param("id")); err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Role deleted", nil)
 }

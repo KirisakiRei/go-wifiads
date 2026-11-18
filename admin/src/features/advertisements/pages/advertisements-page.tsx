@@ -14,7 +14,7 @@ import {
 import { toast } from 'sonner'
 import { queryClient } from '@/app/query-client'
 import { EmptyState, ErrorState, LoadingState } from '@/components/feedback/query-state'
-import { KpiCard, KpiGrid, SearchInput, StatusPill, WavyHeader } from '@/components/ui'
+import { AdMediaThumb, KpiCard, KpiGrid, SearchInput, StatusPill, WavyHeader } from '@/components/ui'
 import { advertisementsApi } from '@/features/advertisements/api/advertisements.api'
 import { advertisementsQueryKey, useAdvertisements } from '@/features/advertisements/hooks/use-advertisements'
 
@@ -36,10 +36,10 @@ export function AdvertisementsPage() {
   })
 
   if (isPending) return <LoadingState />
-  if (error || !ads) return <ErrorState message="Gagal memuat materi iklan sponsor." />
+  if (error || !ads) return <ErrorState message="Gagal memuat daftar iklan." />
 
   const handleDelete = (id: string, title: string) => {
-    if (window.confirm(`Yakin ingin menghapus materi iklan "${title}"?`)) {
+    if (window.confirm(`Yakin ingin menghapus iklan "${title}"?`)) {
       deleteMutation.mutate(id)
     }
   }
@@ -67,51 +67,43 @@ export function AdvertisementsPage() {
             onClick={() => navigate('/advertisements/new')}
           >
             <PlusCircle size={18} />
-            Pasang Iklan Baru
+            Tambah Iklan
           </button>
         }
       />
 
       <div className="stitch-page-stage">
-        {/* Telemetry KPI Cards from Stitch */}
+        {/* KPI Cards */}
         <KpiGrid columns={4}>
           <KpiCard
-            label="Iklan Aktif (Live Now)"
+            label="Iklan Aktif"
             value={activeAds.length}
             icon={Megaphone}
             iconColor="#10b981"
             iconBoxVariant="success"
-            trend={{ label: 'Tayang di Portal', variant: 'success' }}
-            footerLeft="Tayang ke pengunjung"
-            footerRight="Hotspot Hook Active"
+            subtext="Sedang tayang di portal"
           />
 
           <KpiCard
-            label="Format Video Sponsor"
+            label="Iklan Video"
             value={videoAds.length}
             icon={Film}
             iconBoxVariant="secondary"
-            trend={{ label: 'Video MP4 / WEBM' }}
-            footerLeft="Audio muted autoplay"
-            footerRight="Interaktif"
+            subtext="Format MP4 / WebM"
           />
 
           <KpiCard
-            label="Format Foto / Banner"
+            label="Iklan Gambar"
             value={ads.length - videoAds.length}
             icon={Image}
-            trend={{ label: 'Gambar Statis' }}
-            footerLeft="JPG / PNG / WEBP"
-            footerRight="Splash Banner"
+            subtext="Format JPG / PNG / WebP"
           />
 
           <KpiCard
             label="Orientasi Landscape"
             value={landscapeAds.length}
             icon={Monitor}
-            trend={{ label: `${ads.length - landscapeAds.length} Portrait` }}
-            footerLeft="Rasio tampilan portal"
-            footerRight="Auto-Detect Active"
+            subtext={`${ads.length - landscapeAds.length} orientasi portrait`}
           />
         </KpiGrid>
 
@@ -131,7 +123,7 @@ export function AdvertisementsPage() {
           }}
         >
           <SearchInput
-            placeholder="Cari materi iklan, nama sponsor, atau deskripsi..."
+            placeholder="Cari judul atau deskripsi iklan..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             wrapperStyle={{ flex: 1, minWidth: '260px' }}
@@ -145,41 +137,39 @@ export function AdvertisementsPage() {
               style={{ padding: '0.65rem 0.85rem' }}
             >
               <option value="">Semua Orientasi</option>
-              <option value="landscape">Landscape (Mendatar)</option>
-              <option value="portrait">Portrait (Tegak)</option>
+              <option value="landscape">Landscape</option>
+              <option value="portrait">Portrait</option>
             </select>
           </div>
         </div>
 
         {/* Ads Cards Grid */}
         {filteredAds.length === 0 ? (
-          <EmptyState title="Tidak ada materi iklan yang cocok dengan filter atau pencarian Anda." />
+          <EmptyState title="Belum ada materi iklan yang sesuai pencarian." />
         ) : (
           <div className="ad-grid">
             {filteredAds.map((ad) => {
               const isVideo = ad.media_type === 'video'
               return (
                 <div key={ad.id} className="ad-card">
-                  <div className="ad-media-thumb">
-                    {isVideo ? (
-                      <video
-                        src={ad.image_url}
-                        muted
-                        playsInline
-                        loop
-                        autoPlay
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <img src={ad.image_url} alt={ad.title} />
-                    )}
+                  <div
+                    className="ad-media-thumb"
+                    style={{ position: 'relative', cursor: 'pointer', background: '#05070c' }}
+                    onClick={() => navigate(`/advertisements/${ad.id}/edit`)}
+                    title="Klik untuk membuka detail iklan"
+                  >
+                    <AdMediaThumb
+                      url={ad.image_url}
+                      mediaType={ad.media_type}
+                      alt={ad.title}
+                    />
 
                     <div className="ad-badge-overlay">
                       <StatusPill
                         variant={isVideo ? 'secondary' : 'basic'}
                         icon={isVideo ? Film : Image}
                       >
-                        {isVideo ? 'Video' : 'Foto'}
+                        {isVideo ? 'Video' : 'Gambar'}
                       </StatusPill>
                       <StatusPill style={{ background: '#0f172a', color: '#ffffff' }}>
                         {ad.layout_mode === 'portrait' ? 'Portrait' : 'Landscape'}
@@ -204,9 +194,9 @@ export function AdvertisementsPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '12px', color: '#747686', marginTop: 'auto' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                         <Clock size={15} />
-                        {ad.duration_seconds > 0 ? `${ad.duration_seconds} detik countdown` : 'Default (15 dtk)'}
+                        {ad.duration_seconds > 0 ? `${ad.duration_seconds} detik` : '15 detik'}
                       </span>
-                      <span>• Prioritas #{ad.sort_order}</span>
+                      <span>• Urutan #{ad.sort_order}</span>
                     </div>
                   </div>
 
@@ -218,7 +208,7 @@ export function AdvertisementsPage() {
                       onClick={() => navigate(`/advertisements/${ad.id}/edit`)}
                     >
                       <Pencil size={16} />
-                      Edit Iklan
+                      Edit
                     </button>
 
                     <button

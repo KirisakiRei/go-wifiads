@@ -48,13 +48,29 @@ func (r *wifiVisitorRepository) MarkConnected(ctx context.Context, username stri
 		return nil
 	}
 	return r.db.WithContext(ctx).Model(&model.WifiVisitor{}).
-		Where("username = ? AND status IN ?", username, []string{model.VisitorStatusPending, model.VisitorStatusConnected, model.VisitorStatusStale}).
+		Where("username = ? AND status IN ?", username, []string{model.VisitorStatusPending, model.VisitorStatusConnected, model.VisitorStatusStale, model.VisitorStatusClosed}).
 		Updates(map[string]any{
 			"status":             model.VisitorStatusConnected,
 			"connected_at":       at,
 			"last_accounting_at": at,
 			"disconnected_at":    nil,
 		}).Error
+}
+
+func (r *wifiVisitorRepository) MarkInterim(ctx context.Context, username string, at time.Time, sessionTimeSeconds int64) error {
+	if strings.TrimSpace(username) == "" {
+		return nil
+	}
+	updates := map[string]any{
+		"status":             model.VisitorStatusConnected,
+		"last_accounting_at": at,
+	}
+	if sessionTimeSeconds > 0 {
+		updates["session_time_seconds"] = sessionTimeSeconds
+	}
+	return r.db.WithContext(ctx).Model(&model.WifiVisitor{}).
+		Where("username = ?", username).
+		Updates(updates).Error
 }
 
 func (r *wifiVisitorRepository) MarkDisconnected(ctx context.Context, username string, at time.Time, sessionTimeSeconds int64) error {
@@ -68,6 +84,19 @@ func (r *wifiVisitorRepository) MarkDisconnected(ctx context.Context, username s
 			"disconnected_at":      at,
 			"last_accounting_at":   at,
 			"session_time_seconds": sessionTimeSeconds,
+		}).Error
+}
+
+func (r *wifiVisitorRepository) CloseOtherActiveByMAC(ctx context.Context, mac, keepUsername string, at time.Time) error {
+	if strings.TrimSpace(mac) == "" {
+		return nil
+	}
+	return r.db.WithContext(ctx).Model(&model.WifiVisitor{}).
+		Where("mac = ? AND username <> ? AND status IN ?", mac, keepUsername, []string{model.VisitorStatusPending, model.VisitorStatusConnected, model.VisitorStatusStale}).
+		Updates(map[string]any{
+			"status":             model.VisitorStatusClosed,
+			"disconnected_at":    at,
+			"last_accounting_at": at,
 		}).Error
 }
 

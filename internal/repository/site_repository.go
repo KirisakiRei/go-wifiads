@@ -65,6 +65,16 @@ func (r *routerRepository) Create(ctx context.Context, router *model.Router) err
 	return nil
 }
 
+func (r *routerRepository) Update(ctx context.Context, router *model.Router) error {
+	if err := r.db.WithContext(ctx).Save(router).Error; err != nil {
+		if isUniqueViolation(err) {
+			return apperror.ErrAlreadyExists
+		}
+		return err
+	}
+	return nil
+}
+
 func (r *routerRepository) FindByID(ctx context.Context, id string) (*model.Router, error) {
 	var router model.Router
 	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&router).Error; err != nil {

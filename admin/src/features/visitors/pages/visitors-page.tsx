@@ -24,75 +24,81 @@ import { formatBytes, formatDate, formatDuration } from '@/lib/formatters'
 import { useTableQuery } from '@/hooks/use-table-query'
 import { useVisitors } from '@/features/visitors/hooks/use-visitors'
 
+function formatVisitorStatus(status?: string): string {
+  switch (status) {
+    case 'CONNECTED':
+      return 'Online'
+    case 'PENDING':
+      return 'Di Portal'
+    case 'CLOSED':
+      return 'Selesai'
+    case 'STALE':
+      return 'Terputus'
+    default:
+      return status || '—'
+  }
+}
+
 export function VisitorsPage() {
   const { query, searchParams, searchTerm, setSearchTerm, setFilter } = useTableQuery(350)
   const { data, isPending, error } = useVisitors(query)
 
   if (isPending) return <LoadingState />
-  if (error || !data) return <ErrorState message="Gagal memuat pengunjung." />
+  if (error || !data) return <ErrorState message="Gagal memuat daftar pengunjung." />
 
   const leadsCount = data.data.filter((v) => Boolean(v.survey_email || v.survey_phone)).length
   const leadsConversionRate = data.data.length > 0 ? ((leadsCount / data.data.length) * 100).toFixed(1) : '0'
 
   return (
     <div>
-      <WavyHeader
-        title="Data Pengunjung"
-      />
+      <WavyHeader title="Data Pengunjung" />
 
       <div className="stitch-page-stage">
-        {/* Telemetry KPI Cards from Stitch */}
+        {/* KPI Cards */}
         <KpiGrid columns={4}>
           <KpiCard
-            label="Perangkat Terdata di Fleet"
+            label="Total Pengunjung"
             value={data.meta?.total_items || data.data.length}
             icon={Fingerprint}
-            trend={{ label: 'Unique MAC', variant: 'success' }}
-            footerLeft="Across MikroTik APs"
-            footerRight="Active Tracking"
+            subtext="Perangkat tercatat"
           />
 
           <KpiCard
-            label="Leads Terkumpul (Kontak/Survey)"
+            label="Kontak Terkumpul"
             value={leadsCount}
             icon={ClipboardCheck}
             iconBoxVariant="secondary"
-            trend={{ label: `${leadsConversionRate}% Opt-in` }}
-            footerLeft="Kontak Email & WhatsApp"
-            footerRight="Survey Leads"
+            trend={{ label: `${leadsConversionRate}%` }}
+            subtext="Email & nomor WhatsApp"
           />
 
           <KpiCard
-            label="Sesi Aktif Online"
+            label="Sedang Online"
             value={data.data.filter((v) => v.status === 'CONNECTED').length}
             icon={Wifi}
             iconColor="#10b981"
             iconBoxVariant="success"
-            trend={{ label: 'Connected', variant: 'success' }}
-            footerLeft="Pengguna sedang browsing"
-            footerRight="MikroTik DHCP Hook"
+            subtext="Terhubung ke internet"
           />
 
           <KpiCard
-            label="Dilewati (Skip Survey)"
+            label="Tanpa Isi Kontak"
             value={data.data.filter((v) => v.survey_skipped).length}
             icon={FastForward}
-            trend={{ label: 'Paket Basic' }}
-            footerLeft="Melewati pengisian form"
-            footerRight="QoS Terbatas"
+            subtext="Langsung terhubung"
           />
         </KpiGrid>
 
         {/* Main Data Table Container */}
         <DataTableCard
-          title="Daftar Pengunjung & Kontak Survey Leads"
+          title="Daftar Pengunjung & Kontak"
           icon={Table}
           toolbarActions={
             <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <SearchInput
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Cari MAC, IP, atau username..."
+                placeholder="Cari MAC, IP, atau kode voucher..."
                 style={{ width: '240px' }}
               />
 
@@ -102,27 +108,27 @@ export function VisitorsPage() {
                 style={{ padding: '0.65rem 0.85rem' }}
               >
                 <option value="">Semua Status</option>
-                <option value="CONNECTED">Connected</option>
-                <option value="DISCONNECTED">Disconnected</option>
-                <option value="EXPIRED">Expired</option>
+                <option value="CONNECTED">Online</option>
+                <option value="PENDING">Di Portal</option>
+                <option value="CLOSED">Selesai</option>
+                <option value="STALE">Terputus</option>
               </select>
             </div>
           }
         >
-
           {data.data.length ? (
             <>
               <div className="table-wrapper">
                 <table className="stitch-table">
                   <thead>
                     <tr>
-                      <th>Perangkat (Real MAC &amp; IP)</th>
-                      <th>Kredensial &amp; Profil QoS</th>
-                      <th>Status Koneksi</th>
-                      <th>Waktu &amp; Terakhir Terhubung</th>
-                      <th>Masa Aktif Voucher</th>
-                      <th>Konsumsi Traffic</th>
-                      <th>Leads Survey</th>
+                      <th>Perangkat</th>
+                      <th>Voucher &amp; Paket</th>
+                      <th>Status</th>
+                      <th>Waktu Koneksi</th>
+                      <th>Berlaku Sampai</th>
+                      <th>Pemakaian Data</th>
+                      <th>Kontak</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -143,16 +149,16 @@ export function VisitorsPage() {
                                     type="button"
                                     onClick={() => {
                                       navigator.clipboard.writeText(x.mac)
-                                      toast.success('MAC Address disalin')
+                                      toast.success('Alamat MAC disalin')
                                     }}
                                     style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px', color: '#64748b' }}
-                                    title="Salin MAC Address"
+                                    title="Salin Alamat MAC"
                                   >
                                     <Copy size={12} />
                                   </button>
                                 </div>
                                 <small style={{ color: '#64748b', fontSize: '11px' }}>
-                                  IP: {x.ip || '10.10.x.x'}
+                                  IP: {x.ip || '—'}
                                 </small>
                               </div>
                             </div>
@@ -166,7 +172,7 @@ export function VisitorsPage() {
                                 </code>
                               </div>
                               <span style={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>
-                                {x.profile_name || 'Default Hotspot'}
+                                {x.profile_name || 'Standar'}
                               </span>
                             </div>
                           </td>
@@ -176,7 +182,7 @@ export function VisitorsPage() {
                               variant={isConnected ? 'active' : x.status === 'STALE' ? 'expired' : 'neutral'}
                               dot={isConnected}
                             >
-                              {x.status}
+                              {formatVisitorStatus(x.status)}
                             </StatusPill>
                           </td>
 
@@ -188,16 +194,16 @@ export function VisitorsPage() {
                                     Mulai: {formatDate(x.connected_at || x.created_at)}
                                   </span>
                                   <span style={{ color: '#64748b', fontSize: '11px' }}>
-                                    Online: {formatDuration(x.session_time_seconds)}
+                                    Durasi: {formatDuration(x.session_time_seconds)}
                                   </span>
                                 </>
                               ) : (
                                 <>
                                   <span style={{ color: '#475569', fontWeight: 500 }}>
-                                    Putus: {formatDate(x.disconnected_at || x.last_accounting_at || x.created_at)}
+                                    Selesai: {formatDate(x.disconnected_at || x.last_accounting_at || x.created_at)}
                                   </span>
                                   <span style={{ color: '#64748b', fontSize: '11px' }}>
-                                    Total Durasi: {formatDuration(x.session_time_seconds)}
+                                    Durasi: {formatDuration(x.session_time_seconds)}
                                   </span>
                                 </>
                               )}
@@ -205,20 +211,9 @@ export function VisitorsPage() {
                           </td>
 
                           <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', fontSize: '12px' }}>
-                              {x.voucher_expires_at ? (
-                                <>
-                                  <span style={{ fontWeight: 600, color: '#0b1c30' }}>
-                                    {formatDate(x.voucher_expires_at)}
-                                  </span>
-                                  <span style={{ fontSize: '11px', color: x.voucher_status === 'ACTIVE' ? '#10b981' : '#64748b' }}>
-                                    Status: {x.voucher_status || 'Issued'}
-                                  </span>
-                                </>
-                              ) : (
-                                <small style={{ color: '#94a3b8' }}>Mengikuti Sesi</small>
-                              )}
-                            </div>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#0b1c30' }}>
+                              {x.voucher_expires_at ? formatDate(x.voucher_expires_at) : '—'}
+                            </span>
                           </td>
 
                           <td>
@@ -247,7 +242,7 @@ export function VisitorsPage() {
                                 )}
                               </div>
                             ) : x.survey_skipped ? (
-                              <small style={{ color: '#747686' }}>Skip Survey</small>
+                              <small style={{ color: '#747686' }}>Tanpa Survei</small>
                             ) : (
                               <small style={{ color: '#94a3b8' }}>—</small>
                             )}
@@ -262,7 +257,7 @@ export function VisitorsPage() {
             </>
           ) : (
             <div style={{ padding: '2rem' }}>
-              <EmptyState title="Belum ada pengunjung tercatat di database." />
+              <EmptyState title="Belum ada pengunjung tercatat." />
             </div>
           )}
         </DataTableCard>

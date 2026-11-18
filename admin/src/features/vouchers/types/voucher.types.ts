@@ -10,6 +10,8 @@ export interface Voucher {
   profile_name?: string
   bandwidth_down_kbps?: number
   bandwidth_up_kbps?: number
+  portal_session_id?: string
+  expected_mac?: string
   created_by: string
   note?: string
   expires_at: string

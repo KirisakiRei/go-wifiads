@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Activity,
@@ -19,87 +19,171 @@ import { ErrorState, LoadingState } from '@/components/feedback/query-state'
 import { KpiCard, KpiGrid, StatusPill, WavyHeader } from '@/components/ui'
 import { useAdvertisements } from '@/features/advertisements/hooks/use-advertisements'
 import { useOverview } from '@/features/dashboard/hooks/use-overview'
+import type { ChartPoint } from '@/features/dashboard/types/overview.types'
+import { formatBytes } from '@/lib/formatters'
+
+function buildSmoothSvgPath(points: { x: number; y: number }[]): string {
+  if (points.length === 0) return ''
+  if (points.length === 1) return `M ${points[0].x},${points[0].y}`
+  let path = `M ${points[0].x},${points[0].y}`
+  for (let i = 0; i < points.length - 1; i++) {
+    const curr = points[i]
+    const next = points[i + 1]
+    const cpX1 = curr.x + (next.x - curr.x) * 0.45
+    const cpY1 = curr.y
+    const cpX2 = curr.x + (next.x - curr.x) * 0.55
+    const cpY2 = next.y
+    path += ` C ${cpX1.toFixed(1)},${cpY1.toFixed(1)} ${cpX2.toFixed(1)},${cpY2.toFixed(1)} ${next.x.toFixed(1)},${next.y.toFixed(1)}`
+  }
+  return path
+}
 
 export function DashboardPage() {
   const { data, isPending, error } = useOverview()
   const { data: adsData } = useAdvertisements()
   const [timeRange, setTimeRange] = useState<'today' | '7d' | '30d'>('today')
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+
+  const activeSeries: ChartPoint[] = useMemo(() => {
+    if (!data) return []
+    if (timeRange === '7d' && data.trend_7d?.length) return data.trend_7d
+    if (timeRange === '30d' && data.trend_30d?.length) return data.trend_30d
+    if (data.trend_today?.length) return data.trend_today
+    return [
+      { label: '00:00', impressions: 0, logins: 0 },
+      { label: '03:00', impressions: 0, logins: 0 },
+      { label: '06:00', impressions: 0, logins: 0 },
+      { label: '09:00', impressions: 0, logins: 0 },
+      { label: '12:00', impressions: 0, logins: 0 },
+      { label: '15:00', impressions: 0, logins: 0 },
+      { label: '18:00', impressions: 0, logins: 0 },
+      { label: '21:00', impressions: 0, logins: 0 },
+    ]
+  }, [data, timeRange])
+
+  const chartGeometry = useMemo(() => {
+    const width = 760
+    const topY = 26
+    const bottomY = 190
+    const usableHeight = bottomY - topY
+
+    const maxVal = Math.max(
+      4,
+      ...activeSeries.map((p) => Math.max(p.impressions || 0, p.logins || 0))
+    )
+
+    const count = activeSeries.length
+    const stepX = count > 1 ? width / (count - 1) : width
+
+    const impPoints = activeSeries.map((p, idx) => ({
+      x: idx * stepX,
+      y: bottomY - ((p.impressions || 0) / maxVal) * usableHeight,
+      val: p.impressions || 0,
+      label: p.label,
+    }))
+
+    const loginPoints = activeSeries.map((p, idx) => ({
+      x: idx * stepX,
+      y: bottomY - ((p.logins || 0) / maxVal) * usableHeight,
+      val: p.logins || 0,
+      label: p.label,
+    }))
+
+    const impLine = buildSmoothSvgPath(impPoints)
+    const impArea = impLine ? `${impLine} L ${width},${bottomY} L 0,${bottomY} Z` : ''
+    const loginLine = buildSmoothSvgPath(loginPoints)
+    const loginArea = loginLine ? `${loginLine} L ${width},${bottomY} L 0,${bottomY} Z` : ''
+
+    return {
+      maxVal,
+      bottomY,
+      impPoints,
+      loginPoints,
+      impLine,
+      impArea,
+      loginLine,
+      loginArea,
+    }
+  }, [activeSeries])
 
   if (isPending) return <LoadingState />
-  if (error || !data) return <ErrorState message="Gagal memuat ringkasan operasional." />
+  if (error || !data) return <ErrorState message="Gagal memuat ringkasan dashboard." />
 
-  const voucherClaimRate = data.total_vouchers > 0
-    ? ((data.used_vouchers / data.total_vouchers) * 100).toFixed(1)
-    : '0'
+  const claimedTotal = (data.used_vouchers || 0) + (data.active_vouchers || 0)
+  const voucherClaimRate =
+    data.total_vouchers > 0 ? ((claimedTotal / data.total_vouchers) * 100).toFixed(1) : '0'
 
   const activeAds = adsData || []
+  const avgAdSeconds =
+    activeAds.length > 0
+      ? Math.round(activeAds.reduce((acc, a) => acc + (a.duration_seconds || 15), 0) / activeAds.length)
+      : data.avg_ad_duration_seconds || 10
+
+  const totalTrafficBytes = (data.total_input_octets || 0) + (data.total_output_octets || 0)
+  const totalImpressionsInRange = activeSeries.reduce((acc, p) => acc + p.impressions, 0)
+  const totalLoginsInRange = activeSeries.reduce((acc, p) => acc + p.logins, 0)
 
   return (
     <div>
-      <WavyHeader
-        title="Dashboard"
-      />
+      <WavyHeader title="Dashboard" />
 
       <div className="stitch-page-stage">
         {/* 4 Main KPI Cards */}
         <KpiGrid columns={4}>
           <KpiCard
-            label="Perangkat Hotspot Aktif"
+            label="Perangkat Terhubung"
             value={data.active_devices}
             icon={Smartphone}
-            trend={{ label: 'Live Online', variant: 'success' }}
-            footerLeft="Perangkat terhubung portal"
-            footerRight="MikroTik Active"
+            subtext="Sedang menggunakan Wi-Fi"
           />
 
           <KpiCard
-            label="Sesi Pengunjung Menunggu Iklan"
+            label="Menunggu di Portal"
             value={data.pending_devices}
             icon={Hourglass}
             iconColor="#f59e0b"
             iconBoxVariant="warning"
-            trend={{ label: 'Splash Screen', variant: 'warning' }}
-            footerLeft="Tahap tayang iklan / survey"
-            footerRight="Captive Portal"
+            subtext="Sedang menonton iklan"
           />
 
           <KpiCard
-            label="Voucher Terklaim & Digunakan"
-            value={data.used_vouchers}
+            label="Voucher Terpakai"
+            value={claimedTotal}
             icon={CheckCircle2}
             iconBoxVariant="secondary"
-            trend={{ label: `${voucherClaimRate}% Claimed` }}
-            footerLeft="Tingkat utilisasi portal"
-            footerRight={`Total ${data.total_vouchers} Voucher`}
+            trend={{ label: `${voucherClaimRate}%` }}
+            subtext={`Dari total ${data.total_vouchers} voucher`}
           />
 
           <KpiCard
-            label="Sesi Pengguna Aktif"
+            label="Sesi Aktif"
             value={data.active_sessions}
             icon={Activity}
-            trend={{ label: 'Terhubung', variant: 'success' }}
-            footerLeft="Layanan Autentikasi Aktif"
-            footerRight="Waktu Nyata"
+            subtext="Sesi internet sedang berjalan"
           />
         </KpiGrid>
 
-        {/* Visual Charts & Top Performing Campaigns Grid (Stitch 65% / 35% Layout) */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
-          {/* LEFT: Hourly Impressions & Peak Hours Area Chart */}
+        {/* Visual Charts & Active Ads Grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: '1.5rem',
+            alignItems: 'start',
+          }}
+        >
+          {/* LEFT: Live Area Chart */}
           <div className="stitch-card-container" style={{ gridColumn: 'span 2', minWidth: '320px' }}>
             <div className="table-toolbar" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <TrendingUp size={20} style={{ color: '#1d4ed8' }} />
                   <h3 style={{ margin: 0, fontSize: '15px', color: '#0b1c30' }}>
-                    Tren Tayangan Iklan &amp; Login Pengunjung Hotspot
+                    Statistik Tayangan Iklan &amp; Login Pengguna
                   </h3>
-                  <span className="live-badge" style={{ background: '#dce1ff', color: '#0037b0' }}>
-                    24 Jam Terakhir
-                  </span>
                 </div>
                 <p style={{ fontSize: '12px', color: '#64748b', marginTop: '0.25rem' }}>
-                  Analisis beban traffic jam sibuk (Peak Hours) penayangan video splash &amp; web login captive portal
+                  Total {totalImpressionsInRange} tayangan iklan dan {totalLoginsInRange} sesi login pada periode ini
                 </p>
               </div>
 
@@ -109,7 +193,10 @@ export function DashboardPage() {
                   type="button"
                   className={`preset-btn ${timeRange === 'today' ? 'active' : ''}`}
                   style={{ padding: '0.35rem 0.75rem', fontSize: '12px' }}
-                  onClick={() => setTimeRange('today')}
+                  onClick={() => {
+                    setTimeRange('today')
+                    setHoveredIdx(null)
+                  }}
                 >
                   Hari Ini
                 </button>
@@ -117,7 +204,10 @@ export function DashboardPage() {
                   type="button"
                   className={`preset-btn ${timeRange === '7d' ? 'active' : ''}`}
                   style={{ padding: '0.35rem 0.75rem', fontSize: '12px' }}
-                  onClick={() => setTimeRange('7d')}
+                  onClick={() => {
+                    setTimeRange('7d')
+                    setHoveredIdx(null)
+                  }}
                 >
                   7 Hari
                 </button>
@@ -125,7 +215,10 @@ export function DashboardPage() {
                   type="button"
                   className={`preset-btn ${timeRange === '30d' ? 'active' : ''}`}
                   style={{ padding: '0.35rem 0.75rem', fontSize: '12px' }}
-                  onClick={() => setTimeRange('30d')}
+                  onClick={() => {
+                    setTimeRange('30d')
+                    setHoveredIdx(null)
+                  }}
                 >
                   30 Hari
                 </button>
@@ -133,137 +226,262 @@ export function DashboardPage() {
             </div>
 
             <div style={{ padding: '1.25rem', background: '#fafcff', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Legend & Peak Hour Telemetry Strip */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', fontSize: '12px' }}>
+              {/* Legend & Peak Hour Strip */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem',
+                  fontSize: '12px',
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, color: '#1d4ed8' }}>
                     <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#1d4ed8' }}></span>
-                    Tayangan Iklan Hotspot
+                    Tayangan Iklan ({totalImpressionsInRange})
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, color: '#00668a' }}>
                     <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#00668a' }}></span>
-                    Login Sesi Baru
+                    Sesi Login ({totalLoginsInRange})
                   </span>
                 </div>
 
-                <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '3px 8px', borderRadius: '6px', fontWeight: 600, fontSize: '11px' }}>
-                  Puncak Traffic: 11:30 - 13:30 &amp; 19:00 - 21:00 WIB
-                </span>
+                {data.peak_window_label && (
+                  <span
+                    style={{
+                      background: '#e0f2fe',
+                      color: '#0369a1',
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      fontWeight: 600,
+                      fontSize: '11px',
+                    }}
+                  >
+                    Waktu Ramai: {data.peak_window_label}
+                  </span>
+                )}
               </div>
 
-              {/* Responsive SVG Area Chart from Google Stitch */}
+              {/* Dynamic Interactive SVG Area Chart */}
               <div style={{ width: '100%', height: '240px', position: 'relative' }}>
+                {hoveredIdx !== null && activeSeries[hoveredIdx] && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '6px',
+                      left: `${Math.min(82, Math.max(8, (hoveredIdx / Math.max(1, activeSeries.length - 1)) * 100))}%`,
+                      transform: 'translateX(-50%)',
+                      background: '#0f172a',
+                      color: '#ffffff',
+                      padding: '6px 11px',
+                      borderRadius: '8px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      boxShadow: '0 6px 18px rgba(15, 23, 42, 0.25)',
+                      pointerEvents: 'none',
+                      zIndex: 10,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <div style={{ color: '#93c5fd', fontWeight: 700, marginBottom: '2px' }}>
+                      {activeSeries[hoveredIdx].label}
+                    </div>
+                    <div>Tayangan Iklan: {activeSeries[hoveredIdx].impressions}</div>
+                    <div>Sesi Login: {activeSeries[hoveredIdx].logins}</div>
+                  </div>
+                )}
+
                 <svg
                   style={{ width: '100%', height: '100%', overflow: 'visible' }}
                   preserveAspectRatio="none"
-                  viewBox="0 0 760 220"
+                  viewBox="0 0 760 215"
                 >
                   <defs>
                     <linearGradient id="stitchPrimaryArea" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#1D4ED8" stopOpacity="0.3"></stop>
+                      <stop offset="0%" stopColor="#1D4ED8" stopOpacity="0.32"></stop>
                       <stop offset="100%" stopColor="#1D4ED8" stopOpacity="0.0"></stop>
                     </linearGradient>
                     <linearGradient id="stitchSecondaryArea" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#00668A" stopOpacity="0.25"></stop>
+                      <stop offset="0%" stopColor="#00668A" stopOpacity="0.24"></stop>
                       <stop offset="100%" stopColor="#00668A" stopOpacity="0.0"></stop>
                     </linearGradient>
                   </defs>
 
-                  {/* Grid reference lines */}
-                  <line opacity="0.4" stroke="#CBD5E1" strokeDasharray="3 3" strokeWidth="1" x1="0" x2="760" y1="40" y2="40"></line>
-                  <line opacity="0.4" stroke="#CBD5E1" strokeDasharray="3 3" strokeWidth="1" x1="0" x2="760" y1="90" y2="90"></line>
-                  <line opacity="0.4" stroke="#CBD5E1" strokeDasharray="3 3" strokeWidth="1" x1="0" x2="760" y1="140" y2="140"></line>
-                  <line opacity="0.8" stroke="#CBD5E1" strokeWidth="1" x1="0" x2="760" y1="190" y2="190"></line>
+                  <line opacity="0.4" stroke="#CBD5E1" strokeDasharray="3 3" strokeWidth="1" x1="0" x2="760" y1="35" y2="35"></line>
+                  <line opacity="0.4" stroke="#CBD5E1" strokeDasharray="3 3" strokeWidth="1" x1="0" x2="760" y1="86" y2="86"></line>
+                  <line opacity="0.4" stroke="#CBD5E1" strokeDasharray="3 3" strokeWidth="1" x1="0" x2="760" y1="138" y2="138"></line>
+                  <line opacity="0.85" stroke="#CBD5E1" strokeWidth="1" x1="0" x2="760" y1="190" y2="190"></line>
 
-                  {/* Highlight Peak Hour 1: Makan Siang 11:00-14:00 (x approx 300 to 410) */}
-                  <rect fill="#E0F2FE" height="170" opacity="0.5" rx="6" width="110" x="300" y="20"></rect>
-                  {/* Highlight Peak Hour 2: Malam 18:00-21:00 (x approx 540 to 660) */}
-                  <rect fill="#E0F2FE" height="180" opacity="0.5" rx="6" width="120" x="540" y="10"></rect>
+                  {chartGeometry.impArea && (
+                    <path
+                      d={chartGeometry.impArea}
+                      fill="url(#stitchPrimaryArea)"
+                      style={{ transition: 'd 0.35s ease' }}
+                    />
+                  )}
+                  {chartGeometry.loginArea && (
+                    <path
+                      d={chartGeometry.loginArea}
+                      fill="url(#stitchSecondaryArea)"
+                      style={{ transition: 'd 0.35s ease' }}
+                    />
+                  )}
 
-                  {/* Area Fill 1: Impressions Curve */}
-                  <path
-                    d="M 0,170 C 60,165 120,175 180,160 C 240,140 280,70 340,55 C 390,45 420,110 480,115 C 530,120 570,35 630,25 C 680,20 720,80 760,95 L 760,190 L 0,190 Z"
-                    fill="url(#stitchPrimaryArea)"
-                  ></path>
+                  {chartGeometry.impLine && (
+                    <path
+                      d={chartGeometry.impLine}
+                      fill="none"
+                      stroke="#1D4ED8"
+                      strokeLinecap="round"
+                      strokeWidth="2.8"
+                      style={{ transition: 'd 0.35s ease' }}
+                    />
+                  )}
+                  {chartGeometry.loginLine && (
+                    <path
+                      d={chartGeometry.loginLine}
+                      fill="none"
+                      stroke="#00668A"
+                      strokeDasharray="4 2"
+                      strokeLinecap="round"
+                      strokeWidth="2.2"
+                      style={{ transition: 'd 0.35s ease' }}
+                    />
+                  )}
 
-                  {/* Stroke Line 1: Tayangan Iklan */}
-                  <path
-                    d="M 0,170 C 60,165 120,175 180,160 C 240,140 280,70 340,55 C 390,45 420,110 480,115 C 530,120 570,35 630,25 C 680,20 720,80 760,95"
-                    fill="none"
-                    stroke="#1D4ED8"
-                    strokeLinecap="round"
-                    strokeWidth="2.5"
-                  ></path>
-
-                  {/* Stroke Line 2: Login Sesi Baru */}
-                  <path
-                    d="M 0,182 C 60,180 120,185 180,175 C 240,160 280,115 340,98 C 390,90 420,135 480,140 C 530,145 570,85 630,68 C 680,60 720,120 760,135"
-                    fill="none"
-                    stroke="#00668A"
-                    strokeDasharray="4 2"
-                    strokeLinecap="round"
-                    strokeWidth="2"
-                  ></path>
-
-                  {/* Interactive Peak Dots */}
-                  <circle cx="340" cy="55" fill="#1D4ED8" r="4.5" stroke="#FFFFFF" strokeWidth="2"></circle>
-                  <circle cx="630" cy="25" fill="#1D4ED8" r="5" stroke="#FFFFFF" strokeWidth="2.5"></circle>
+                  {chartGeometry.impPoints.map((pt, idx) => {
+                    const loginPt = chartGeometry.loginPoints[idx]
+                    const isHovered = hoveredIdx === idx
+                    return (
+                      <g
+                        key={pt.label + idx}
+                        onMouseEnter={() => setHoveredIdx(idx)}
+                        onMouseLeave={() => setHoveredIdx(null)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {isHovered && (
+                          <line
+                            x1={pt.x}
+                            x2={pt.x}
+                            y1={20}
+                            y2={190}
+                            stroke="#93c5fd"
+                            strokeDasharray="3 3"
+                            strokeWidth="1.5"
+                          />
+                        )}
+                        <circle
+                          cx={pt.x}
+                          cy={pt.y}
+                          r={isHovered ? 6 : 4}
+                          fill="#1D4ED8"
+                          stroke="#FFFFFF"
+                          strokeWidth="2"
+                        />
+                        {loginPt && (
+                          <circle
+                            cx={loginPt.x}
+                            cy={loginPt.y}
+                            r={isHovered ? 5 : 3.5}
+                            fill="#00668A"
+                            stroke="#FFFFFF"
+                            strokeWidth="1.5"
+                          />
+                        )}
+                        <rect
+                          x={pt.x - 30}
+                          y={0}
+                          width={60}
+                          height={200}
+                          fill="transparent"
+                        />
+                      </g>
+                    )
+                  })}
                 </svg>
               </div>
 
-              {/* Bottom Time Axis */}
+              {/* Dynamic Bottom X-Axis Labels */}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
-                <span>00:00</span>
-                <span>04:00</span>
-                <span>08:00</span>
-                <span style={{ color: '#1d4ed8', fontWeight: 700 }}>11:30 (Makan Siang)</span>
-                <span>15:00</span>
-                <span style={{ color: '#1d4ed8', fontWeight: 700 }}>19:30 (Malam)</span>
-                <span>23:59</span>
+                {activeSeries.map((pt, idx) => (
+                  <span
+                    key={pt.label + idx}
+                    style={{
+                      color: hoveredIdx === idx ? '#1d4ed8' : '#64748b',
+                      fontWeight: hoveredIdx === idx ? 800 : 600,
+                    }}
+                  >
+                    {pt.label}
+                  </span>
+                ))}
               </div>
 
-              {/* 3 Telemetry Summary Metric Tiles */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem', marginTop: '0.5rem', paddingTop: '0.85rem', borderTop: '1px solid #e2e8f0' }}>
+              {/* 3 Summary Metric Tiles */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: '0.85rem',
+                  marginTop: '0.5rem',
+                  paddingTop: '0.85rem',
+                  borderTop: '1px solid #e2e8f0',
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#eff6ff', padding: '0.75rem 1rem', borderRadius: '10px' }}>
                   <Timer size={22} style={{ color: '#00668a' }} />
                   <div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>Rerata Durasi Tayang</div>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#0b1c30' }}>14.6 Detik</div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>Rata-rata Durasi Iklan</div>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#0b1c30' }}>{avgAdSeconds} Detik</div>
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#eff6ff', padding: '0.75rem 1rem', borderRadius: '10px' }}>
                   <ShieldCheck size={22} style={{ color: '#1d4ed8' }} />
                   <div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>Validasi Login Sukses</div>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#0b1c30' }}>99.41%</div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>Keberhasilan Login</div>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#0b1c30' }}>
+                      {(data.login_success_rate ?? 100).toFixed(1)}%
+                    </div>
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: '#eff6ff', padding: '0.75rem 1rem', borderRadius: '10px' }}>
                   <Gauge size={22} style={{ color: '#00668a' }} />
                   <div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>Throughput Fleet</div>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#0b1c30' }}>438 Mbps</div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>Total Pemakaian Data</div>
+                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#0b1c30' }}>
+                      {formatBytes(totalTrafficBytes)}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* RIGHT: Top Performing Campaigns Card */}
+          {/* RIGHT: Active Ads Card */}
           <div className="stitch-card-container">
             <div className="table-toolbar" style={{ borderBottom: '1px solid #e2e8f0' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '15px', color: '#0b1c30' }}>
-                  Kampanye Iklan Aktif
-                </h3>
+                <h3 style={{ margin: 0, fontSize: '15px', color: '#0b1c30' }}>Iklan Aktif</h3>
                 <span style={{ fontSize: '12px', color: '#64748b' }}>
-                  Materi promosi tayang di captive portal
+                  Materi iklan yang sedang tayang
                 </span>
               </div>
 
-              <Link to="/advertisements" style={{ fontSize: '12px', color: '#1d4ed8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem', textDecoration: 'none' }}>
+              <Link
+                to="/advertisements"
+                style={{
+                  fontSize: '12px',
+                  color: '#1d4ed8',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.2rem',
+                  textDecoration: 'none',
+                }}
+              >
                 Lihat Semua <ArrowRight size={14} />
               </Link>
             </div>
@@ -273,8 +491,12 @@ export function DashboardPage() {
                 <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748b' }}>
                   <Sparkles size={24} style={{ color: '#94a3b8', marginBottom: '0.5rem' }} />
                   <p style={{ margin: 0, fontSize: '13px' }}>Belum ada materi iklan terpasang.</p>
-                  <Link to="/advertisements/new" className="btn btn-secondary" style={{ marginTop: '0.75rem', display: 'inline-flex', fontSize: '12px' }}>
-                    + Pasang Iklan Pertama
+                  <Link
+                    to="/advertisements/new"
+                    className="btn btn-secondary"
+                    style={{ marginTop: '0.75rem', display: 'inline-flex', fontSize: '12px' }}
+                  >
+                    + Tambah Iklan
                   </Link>
                 </div>
               ) : (
@@ -308,15 +530,28 @@ export function DashboardPage() {
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: '13px', color: '#0b1c30', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          fontSize: '13px',
+                          color: '#0b1c30',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
                         {ad.title}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.2rem' }}>
-                        <StatusPill variant={ad.is_active ? 'active' : 'neutral'} dot={ad.is_active} style={{ fontSize: '10px', padding: '1px 6px' }}>
-                          {ad.is_active ? 'Aktif' : 'Draft'}
+                        <StatusPill
+                          variant={ad.is_active ? 'active' : 'neutral'}
+                          dot={ad.is_active}
+                          style={{ fontSize: '10px', padding: '1px 6px' }}
+                        >
+                          {ad.is_active ? 'Aktif' : 'Nonaktif'}
                         </StatusPill>
                         <span style={{ fontSize: '11px', color: '#64748b' }}>
-                          {ad.duration_seconds || 15}s • {ad.layout_mode}
+                          Urutan #{ad.sort_order} • {ad.duration_seconds || 15} dtk
                         </span>
                       </div>
                     </div>
@@ -327,47 +562,50 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* Fleet & Voucher Status Container */}
+        {/* Ringkasan Voucher Container */}
         <div className="stitch-card-container">
           <div className="table-toolbar">
             <div className="table-toolbar-title">
               <Router size={20} style={{ color: '#1d4ed8' }} />
-              <h3>Status Router &amp; Distribusi Voucher Hotspot</h3>
-            </div>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <StatusPill variant="active">Jaringan Router Aktif</StatusPill>
-              <StatusPill variant="basic">Pencatatan Sesi Berjalan</StatusPill>
+              <h3>Ringkasan Voucher</h3>
             </div>
           </div>
 
-          <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
+          <div
+            style={{
+              padding: '1.5rem',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: '1.25rem',
+            }}
+          >
             <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <span className="kpi-label">Stok Voucher Siap Pakai</span>
+              <span className="kpi-label">Voucher Siap Pakai</span>
               <div style={{ fontSize: '24px', fontWeight: 700, color: '#0b1c30', marginTop: '0.4rem' }}>
                 {data.issued_vouchers}
               </div>
               <p style={{ fontSize: '12px', color: '#64748b', marginTop: '0.35rem' }}>
-                Voucher telah digenerate dan siap login sebelum masa kedaluwarsa TTL habis.
+                Kode voucher sudah diterbitkan dan siap digunakan untuk login.
               </p>
             </div>
 
             <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <span className="kpi-label">Voucher Sedang Aktif di Router</span>
+              <span className="kpi-label">Voucher Sedang Aktif</span>
               <div style={{ fontSize: '24px', fontWeight: 700, color: '#166534', marginTop: '0.4rem' }}>
                 {data.active_vouchers}
               </div>
               <p style={{ fontSize: '12px', color: '#64748b', marginTop: '0.35rem' }}>
-                User saat ini sedang terhubung dan mengonsumsi kuota bandwidth sesuai profil paket.
+                Pengguna sedang terhubung ke internet menggunakan voucher ini.
               </p>
             </div>
 
             <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <span className="kpi-label">Total Volume Voucher</span>
+              <span className="kpi-label">Total Voucher Diterbitkan</span>
               <div style={{ fontSize: '24px', fontWeight: 700, color: '#1d4ed8', marginTop: '0.4rem' }}>
                 {data.total_vouchers}
               </div>
               <p style={{ fontSize: '12px', color: '#64748b', marginTop: '0.35rem' }}>
-                Akumulasi seluruh voucher yang pernah diterbitkan oleh portal atau admin.
+                Keseluruhan voucher yang pernah dibuat di sistem.
               </p>
             </div>
           </div>

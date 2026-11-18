@@ -22,18 +22,21 @@ type VoucherService interface {
 // PortalService owns the visitor portal lifecycle.
 type PortalService interface {
 	CurrentAdvertisement(ctx context.Context) (*model.Advertisement, error)
+	SelectAdvertisementForRouter(ctx context.Context, nasIdentifier string) (*model.Advertisement, error)
 	CreateSession(ctx context.Context, req dto.CreatePortalSessionRequest, userAgent string) (*dto.PortalSessionResponse, error)
 	SessionStatus(ctx context.Context, token string) (*dto.PortalSessionStatusResponse, error)
 	SubmitSurvey(ctx context.Context, token string, req dto.SubmitSurveyRequest) (*dto.SubmitSurveyResponse, error)
 	Connect(ctx context.Context, token string) (*dto.ConnectResponse, error)
+	RecordPromoClick(ctx context.Context, token string) (string, error)
 }
 
-// AdminService serves the read-only dashboard views.
+// AdminService serves the read-only dashboard views and router provisioning.
 type AdminService interface {
 	Overview(ctx context.Context) (*dto.OverviewResponse, error)
 	ListVisitors(ctx context.Context, query dto.VisitorListQuery) ([]dto.VisitorResponse, dto.PaginationMeta, error)
 	ListSessions(ctx context.Context, query dto.SessionListQuery) ([]dto.SessionResponse, dto.PaginationMeta, error)
 	ListRouters(ctx context.Context) ([]dto.RouterResponse, error)
+	CreateRouter(ctx context.Context, actorID, actorName string, req dto.CreateRouterRequest) (*dto.RouterResponse, error)
 	UpdateRouterVoucherConfig(ctx context.Context, actorID, actorName, routerID string, req dto.UpdateRouterVoucherConfigRequest) (*dto.RouterResponse, error)
 }
 
@@ -45,7 +48,7 @@ type ProfileService interface {
 	Update(ctx context.Context, id string, req dto.UpdateProfileRequest) (*dto.ConnectProfileResponse, error)
 }
 
-// UserService manages admin user accounts.
+// UserService manages admin user accounts and RBAC roles.
 type UserService interface {
 	List(ctx context.Context) ([]dto.AdminUserResponse, error)
 	Get(ctx context.Context, id string) (*dto.AdminUserResponse, error)
@@ -53,6 +56,11 @@ type UserService interface {
 	Update(ctx context.Context, id string, req dto.UpdateAdminUserRequest) (*dto.AdminUserResponse, error)
 	ChangePassword(ctx context.Context, id string, req dto.ChangePasswordRequest) error
 	Delete(ctx context.Context, id string) error
+
+	ListRoles(ctx context.Context) ([]dto.RoleResponse, error)
+	CreateRole(ctx context.Context, req dto.CreateRoleRequest) (*dto.RoleResponse, error)
+	UpdateRole(ctx context.Context, id string, req dto.UpdateRoleRequest) (*dto.RoleResponse, error)
+	DeleteRole(ctx context.Context, id string) error
 }
 
 // AdvertisementService manages promotional ads displayed on the captive portal.

@@ -35,7 +35,7 @@ func SecurityHeaders(enableHSTS bool) gin.HandlerFunc {
 		c.Header("Content-Security-Policy", csp)
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("Referrer-Policy", "no-referrer")
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Header("X-Permitted-Cross-Domain-Policies", "none")
 		c.Header("Cross-Origin-Opener-Policy", "same-origin")
 		if enableHSTS {

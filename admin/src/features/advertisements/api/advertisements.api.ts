@@ -2,6 +2,19 @@ import { env } from '@/config/env'
 import { apiClient, jsonBody } from '@/lib/api-client'
 import type { Advertisement, CreateAdvertisementPayload, UpdateAdvertisementPayload } from '@/features/advertisements/types/advertisement.types'
 
+export interface UploadProgressInfo {
+  loaded: number
+  total: number
+  percent: number
+}
+
+export interface UploadMediaResult {
+  url: string
+  r2_url?: string
+  filename: string
+  media_type?: 'image' | 'video'
+}
+
 export const advertisementsApi = {
   list: () => apiClient<Advertisement[]>('/api/v1/admin/advertisements'),
   get: (id: string) => apiClient<Advertisement>(`/api/v1/admin/advertisements/${id}`),
@@ -11,18 +24,53 @@ export const advertisementsApi = {
     apiClient<Advertisement>(`/api/v1/admin/advertisements/${id}`, { ...jsonBody(data), method: 'PUT' }),
   delete: (id: string) =>
     apiClient<void>(`/api/v1/admin/advertisements/${id}`, { method: 'DELETE' }),
-  uploadImage: async (file: File) => {
-    const formData = new FormData()
-    formData.append('image', file)
-    const response = await fetch(`${env.apiBaseUrl}/api/v1/admin/advertisements/upload`, {
-      method: 'POST',
-      credentials: 'include',
-      body: formData,
+  uploadImage: (
+    file: File,
+    onProgress?: (info: UploadProgressInfo) => void
+  ): Promise<UploadMediaResult> => {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData()
+      formData.append('image', file)
+
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `${env.apiBaseUrl}/api/v1/admin/advertisements/upload`, true)
+      xhr.withCredentials = true
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onProgress) {
+          const percent = Math.min(100, Math.round((event.loaded / event.total) * 100))
+          onProgress({
+            loaded: event.loaded,
+            total: event.total,
+            percent,
+          })
+        }
+      }
+
+      xhr.onload = () => {
+        let payload: {
+          success?: boolean
+          message?: string
+          data?: UploadMediaResult
+        } | null = null
+        try {
+          payload = JSON.parse(xhr.responseText)
+        } catch {
+          payload = null
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300 && payload?.success && payload.data) {
+          resolve(payload.data)
+        } else {
+          reject(new Error(payload?.message || `Gagal mengunggah berkas (HTTP ${xhr.status})`))
+        }
+      }
+
+      xhr.onerror = () => {
+        reject(new Error('Koneksi terputus saat mengunggah berkas media'))
+      }
+
+      xhr.send(formData)
     })
-    const payload = (await response.json().catch(() => null)) as { success?: boolean; message?: string; data?: { url: string; filename: string } } | null
-    if (!response.ok || !payload?.success || !payload.data) {
-      throw new Error(payload?.message || 'Gagal mengunggah gambar')
-    }
-    return payload.data
   },
 }

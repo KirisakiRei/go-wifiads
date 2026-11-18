@@ -30,8 +30,18 @@ type Config struct {
 	JWT    JWTConfig
 	Portal PortalConfig
 	Radius RadiusConfig
+	R2     R2Config
 	Keys   KeysConfig
 	Seed   SeedConfig
+}
+
+// R2Config holds Cloudflare R2 Object Storage settings.
+type R2Config struct {
+	AccountID       string
+	AccessKeyID     string
+	SecretAccessKey string
+	BucketName      string
+	PublicURL       string
 }
 
 // DBConfig describes the PostgreSQL connection.
@@ -154,6 +164,13 @@ func Load() (*Config, error) {
 			AcctAddr:          env("RADIUS_ACCT_ADDR", ":1813"),
 			StaleAfterSeconds: envInt("RADIUS_STALE_AFTER_SECONDS", 900),
 			RetentionDays:     envInt("RADIUS_EVENT_RETENTION_DAYS", 30),
+		},
+		R2: R2Config{
+			AccountID:       env("R2_ACCOUNT_ID", ""),
+			AccessKeyID:     env("R2_ACCESS_KEY_ID", ""),
+			SecretAccessKey: env("R2_SECRET_ACCESS_KEY", ""),
+			BucketName:      env("R2_BUCKET_NAME", ""),
+			PublicURL:       env("R2_PUBLIC_URL", ""),
 		},
 		Seed: SeedConfig{
 			AdminUsername:         env("SEED_ADMIN_USERNAME", "admin"),

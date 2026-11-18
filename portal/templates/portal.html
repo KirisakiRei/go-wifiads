@@ -3,39 +3,17 @@
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#2563eb">
-  <title>{{if .Ad}}{{.Ad.Title}}{{else}}Wi-Fi Portal{{end}}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <title>{{if .Ad}}{{.Ad.Title}}{{else}}Wi-Fi Gratis{{end}}</title>
   <link rel="stylesheet" href="/static/css/portal.css">
 </head>
 <body>
-  <!-- Decorative background shapes -->
-  <div class="bg-decor" aria-hidden="true">
-    <span class="shape shape-lg"></span>
-    <span class="shape shape-md"></span>
-    <span class="shape shape-sm"></span>
-    <span class="shape shape-dot"></span>
-    <span class="shape shape-line"></span>
-  </div>
-
   <div class="app">
-    <!-- Brand header -->
-    <header class="brandbar">
-      <span class="brand-logo" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
-          <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
-          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
-          <line x1="12" y1="20" x2="12.01" y2="20"/>
-        </svg>
-      </span>
-      <span class="brand-name">{{if .Ad}}{{.Ad.Title}}{{else}}HotSpot Portal{{end}}</span>
-    </header>
-
     <!-- ============ SCREEN 1: WELCOME ============ -->
     <section class="screen screen-welcome is-active" data-screen="welcome" aria-label="Selamat datang">
-      <div class="hero">
-        <div class="hero-icon" aria-hidden="true">
+      <div class="portal-card welcome-card">
+        <div class="wifi-brand-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
             <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
@@ -43,28 +21,59 @@
             <line x1="12" y1="20" x2="12.01" y2="20"/>
           </svg>
         </div>
-        <h1 class="hero-title">Selamat Datang</h1>
-        <p class="hero-subtitle">Nikmati akses internet gratis dengan mudah dan cepat</p>
+
+        <h1 class="card-title">Wi-Fi Gratis</h1>
+        <p class="card-subtitle">
+          Tonton iklan singkat selama <strong>{{.AdDurationSeconds}} detik</strong> untuk terhubung ke internet.
+        </p>
+
+        <div id="welcome-status" class="notice" role="status" aria-live="polite" hidden></div>
+
         <button type="button" class="btn-primary" id="start-button">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="7" y="2" width="10" height="20" rx="2"/>
-          </svg>
-          Mulai Sekarang
+          Hubungkan Sekarang
         </button>
       </div>
-      <div id="welcome-status" class="notice" role="status" aria-live="polite" hidden></div>
     </section>
 
-    <!-- ============ SCREEN 2: AD + COUNTDOWN (FULLSCREEN) ============ -->
-    <section class="screen screen-ad {{if .Ad}}{{if eq .Ad.LayoutMode "portrait"}}ad-layout--portrait{{else}}ad-layout--landscape{{end}}{{else}}ad-layout--landscape{{end}}" data-screen="ad" aria-label="Iklan sponsor">
+    <!-- ============ SCREEN 2: REWARDED AD (IN-APP / IN-GAME STYLE) ============ -->
+    <section class="screen screen-ad {{if .Ad}}{{if eq .Ad.LayoutMode "portrait"}}ad-layout--portrait{{else}}ad-layout--landscape{{end}}{{else}}ad-layout--landscape{{end}}" data-screen="ad" aria-label="Iklan">
       <div class="ad-stage">
-        <!-- Media / Backdrop -->
+        <!-- Top HUD Bar: Left = subtle "Iklan" label, Right = Timer / Next button -->
+        <div class="ad-hud-top">
+          <div class="ad-sponsor-pill">
+            <span>Iklan</span>
+          </div>
+
+          <div class="ad-reward-control">
+            <!-- Active during countdown -->
+            <div class="ad-timer-pill" id="yt-counter">
+              <div class="ad-timer-ring-wrap" aria-hidden="true">
+                <svg viewBox="0 0 120 120" class="ad-timer-svg">
+                  <circle class="ad-timer-track" cx="60" cy="60" r="52"/>
+                  <circle class="ad-timer-progress" cx="60" cy="60" r="52" id="ring-progress"/>
+                </svg>
+              </div>
+              <span class="ad-timer-label" id="ad-timer-label-text">Sisa <strong id="countdown">{{.AdDurationSeconds}}</strong> dtk</span>
+            </div>
+
+            <!-- Active when countdown finishes -->
+            <button type="button" class="ad-next-btn" id="connect-button" disabled>
+              <span>Lanjutkan</span>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14"/>
+                <path d="m12 5 7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Media Stage (Full Width on Mobile for Landscape, Never Stretched) -->
         <div class="ad-media-wrap">
           {{if .Ad}}{{if .Ad.ImageURL}}
             {{if .IsVideo}}
-              <video id="ad-video" src="{{.Ad.ImageURL}}" autoplay muted playsinline loop></video>
+              <video id="ad-video" src="{{.Ad.ImageURL}}" preload="auto" muted playsinline loop></video>
             {{else}}
-              <img id="ad-image" src="{{.Ad.ImageURL}}" alt="Iklan Sponsor">
+              <img id="ad-image" src="{{.Ad.ImageURL}}" alt="Iklan" decoding="async">
             {{end}}
           {{else}}
             <div class="ad-placeholder" aria-hidden="true">
@@ -77,188 +86,78 @@
           {{end}}
         </div>
 
-        <!-- Landscape overlay: Info di kiri bawah, YouTube-style counter di kanan bawah -->
-        <div class="ad-overlay-landscape">
-          <div class="ad-info-pill">
-            <span class="ad-tag">Sponsor</span>
-            <strong class="ad-title">{{if .Ad}}{{.Ad.Title}}{{else}}Wi-Fi Ads{{end}}</strong>
-            <p class="ad-text">{{if .Ad}}{{.Ad.Body}}{{else}}Materi promosi sponsor resmi belum tersedia.{{end}}</p>
-          </div>
-
-          <div class="ad-action-pill">
-            <!-- Counter pill gaya YouTube ad: sleek, rapi, dan proporsional -->
-            <div class="yt-counter" id="yt-counter">
-              <div class="yt-spinner" aria-hidden="true">
-                <svg viewBox="0 0 120 120" class="yt-ring">
-                  <circle class="yt-ring-track" cx="60" cy="60" r="52"/>
-                  <circle class="yt-ring-progress" cx="60" cy="60" r="52" id="ring-progress"/>
-                </svg>
-              </div>
-              <span class="yt-counter-text">Akses terbuka dalam <strong id="countdown-inline">{{.AdDurationSeconds}}</strong> dtk</span>
-              <span id="countdown" hidden>{{.AdDurationSeconds}}</span>
-            </div>
-
-            <button type="button" class="btn-primary btn-yt-connect" id="connect-button" disabled>
-              Lanjutkan &rarr;
-            </button>
+        <!-- Subtle bottom caption (non-intrusive, no buttons) -->
+        {{if .Ad}}
+        <div class="ad-caption-bar">
+          <div class="ad-caption-inner">
+            <strong class="ad-caption-title">{{.Ad.Title}}</strong>
+            {{if .Ad.Body}}<p class="ad-caption-body">{{.Ad.Body}}</p>{{end}}
           </div>
         </div>
-
-        <!-- Portrait panel: Khusus mode portrait (split di sebelah kanan) -->
-        <div class="ad-side-panel">
-          <div class="ad-side-header">
-            <span class="brand-logo brand-logo--sm" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
-                <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
-                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
-                <line x1="12" y1="20" x2="12.01" y2="20"/>
-              </svg>
-            </span>
-            <span class="ad-tag">Sponsor</span>
-          </div>
-
-          <div class="ad-side-content">
-            <h2 class="ad-side-title">{{if .Ad}}{{.Ad.Title}}{{else}}Sponsor Resmi{{end}}</h2>
-            <p class="ad-side-text">{{if .Ad}}{{.Ad.Body}}{{else}}Nikmati akses internet gratis dengan dukungan sponsor kami.{{end}}</p>
-          </div>
-
-          <div class="ad-side-action">
-            <div class="countdown-block">
-              <div class="countdown-ring">
-                <svg viewBox="0 0 120 120" class="ring" aria-hidden="true">
-                  <circle class="ring-track" cx="60" cy="60" r="52"/>
-                  <circle class="ring-progress" cx="60" cy="60" r="52" id="ring-progress-portrait"/>
-                </svg>
-                <div class="countdown-number" id="countdown-portrait">{{.AdDurationSeconds}}</div>
-              </div>
-              <p class="countdown-label">Akses internet terbuka dalam <strong id="countdown-inline-portrait">{{.AdDurationSeconds}}</strong> detik</p>
-            </div>
-
-            <button type="button" class="btn-primary btn-side-connect" id="connect-button-portrait" disabled>
-              Tunggu {{.AdDurationSeconds}} detik...
-            </button>
-          </div>
-        </div>
+        {{end}}
 
         <div id="status" class="notice notice-ad" role="alert" aria-live="polite" hidden></div>
       </div>
     </section>
 
-    <!-- ============ SCREEN 2.5: SURVEY / TIER SELECTION ============ -->
-    <section class="screen screen-survey" data-screen="survey" aria-label="Pilihan Akses Internet">
-      <div class="survey-card">
+    <!-- ============ SCREEN 3: CONNECT / SURVEY (SIMPLE FORM OR SKIP) ============ -->
+    <section class="screen screen-survey" data-screen="survey" aria-label="Hubungkan ke Internet">
+      <div class="portal-card survey-card">
         <div class="survey-header">
-          <div class="survey-badge">
-            <span class="badge-icon" aria-hidden="true">⚡</span>
-            <span>Tingkatkan Kecepatan</span>
-          </div>
-          <h2 class="survey-title">Dapatkan Akses Internet Super Cepat</h2>
-          <p class="survey-subtitle">
-            Cukup lengkapi kontak Anda di bawah untuk membuka <strong>Akses Premium (5 Mbps &amp; 2 Jam)</strong>, atau lewati untuk akses standar.
+          <h2 class="card-title">Hubungkan ke Wi-Fi</h2>
+          <p class="card-subtitle">
+            Isi kontak Anda di bawah ini, atau langsung lanjutkan tanpa mengisi data.
           </p>
-        </div>
-
-        <!-- Tier benefit highlight cards -->
-        <div class="tier-comparison">
-          <div class="tier-box tier-box--premium">
-            <div class="tier-header">
-              <span class="tier-badge">Rekomendasi</span>
-              <strong class="tier-name">Akses Premium</strong>
-            </div>
-            <div class="tier-speed">Hingga <strong>5 Mbps</strong> &bull; <strong>2 Jam</strong></div>
-            <p class="tier-note">Cukup isi Email atau No. WhatsApp Anda di bawah.</p>
-          </div>
         </div>
 
         <form id="survey-form" class="survey-form" onsubmit="return false;">
           <div class="form-group">
-            <label for="survey-email" class="form-label">Alamat Email (Opsional)</label>
-            <input type="email" id="survey-email" class="form-input" placeholder="contoh: ryan@gmail.com" autocomplete="email">
+            <label for="survey-email" class="form-label">Email</label>
+            <input type="email" id="survey-email" class="form-input" placeholder="nama@email.com" autocomplete="email">
           </div>
 
           <div class="form-group">
-            <label for="survey-phone" class="form-label">Nomor WhatsApp / HP (Opsional)</label>
-            <input type="tel" id="survey-phone" class="form-input" placeholder="contoh: 081234567890" autocomplete="tel">
+            <label for="survey-phone" class="form-label">Nomor WhatsApp / HP</label>
+            <input type="tel" id="survey-phone" class="form-input" placeholder="0812xxxxxxxx" autocomplete="tel">
           </div>
 
           <div id="survey-status" class="notice notice-survey" role="alert" aria-live="polite" hidden></div>
 
-          <button type="button" class="btn-primary btn-survey-submit" id="survey-submit-button">
-            Dapatkan Akses Cepat &amp; Hubungkan &rarr;
-          </button>
+          <div class="survey-actions">
+            <button type="button" class="btn-primary" id="survey-submit-button">
+              Simpan &amp; Hubungkan
+            </button>
 
-          <button type="button" class="btn-link-skip" id="survey-skip-button">
-            Lewati dan lanjutkan dengan kecepatan standar (1 Mbps)
-          </button>
+            <button type="button" class="btn-secondary" id="survey-skip-button">
+              Lewati &amp; Langsung Terhubung
+            </button>
+          </div>
         </form>
       </div>
     </section>
 
-    <!-- ============ SCREEN 3: CONNECTED (HERO BANNER + DETAIL CARD) ============ -->
+    <!-- ============ SCREEN 4: CONNECTED (MINIMAL & CLEAN) ============ -->
     <section class="screen screen-connected" data-screen="connected" aria-label="Terhubung">
-      <!-- Full-width Proportional Green Hero Banner -->
-      <div class="connected-hero">
-        <div class="success-check" aria-hidden="true">
+      <div class="portal-card connected-card">
+        <div class="connected-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
         </div>
 
-        <div class="connected-copy">
-          <h1 class="connected-title">Anda Sudah Terhubung!</h1>
-          <p class="connected-subtitle">Nikmati akses internet <strong>Wi-Fi Gratis</strong> Anda sekarang.</p>
-        </div>
+        <h1 class="card-title">Terhubung ke Internet</h1>
+        <p class="card-subtitle">Koneksi Wi-Fi Anda sudah aktif dan siap digunakan.</p>
 
-        <div class="connected-redirect">
-          <div class="redirect-ring" aria-hidden="true">
-            <svg viewBox="0 0 48 48" class="redirect-svg">
-              <circle class="redirect-track" cx="24" cy="24" r="20"/>
-              <circle class="redirect-progress" cx="24" cy="24" r="20" id="redirect-progress"/>
-            </svg>
-            <span class="redirect-number" id="conn-redirect-inline">10</span>
-          </div>
-          <div class="redirect-text">
-            <span>Mengalihkan ke Google dalam <strong id="conn-redirect-count">10</strong> detik</span>
-          </div>
-          <a class="btn-redirect" id="redirect-now" href="https://www.google.com">Buka Sekarang &rarr;</a>
-        </div>
-      </div>
+        <a class="btn-primary btn-redirect-link" id="redirect-now" href="https://www.google.com">
+          Mulai Browsing
+        </a>
 
-      <!-- Detail Session Card di bawah Hero (Rapi, Proporsional & Elegan) -->
-      <div class="connected-body">
-        <div class="connected-detail">
-          <div class="connected-grid">
-            <div class="fact-box">
-              <span class="fact-label">Paket Internet</span>
-              <span class="fact-val" id="conn-profile">—</span>
-            </div>
-            <div class="fact-box">
-              <span class="fact-label">Kecepatan Max</span>
-              <span class="fact-val" id="conn-speed">—</span>
-            </div>
-            <div class="fact-box">
-              <span class="fact-label">Durasi Sesi</span>
-              <span class="fact-val" id="conn-duration-detail">—</span>
-              <span id="conn-duration" hidden>—</span>
-            </div>
-            <div class="fact-box">
-              <span class="fact-label">Voucher</span>
-              <span class="fact-val mono" id="conn-username">—</span>
-            </div>
-            <div class="fact-box">
-              <span class="fact-label">Berlaku Sampai</span>
-              <span class="fact-val" id="conn-expiry">—</span>
-            </div>
-          </div>
-          <p class="connected-note">Sesi terikat ke perangkat ini. Jika berpindah perangkat, silakan hubungkan ulang.</p>
-        </div>
+        <p class="redirect-hint">
+          Mengalihkan halaman otomatis dalam <strong id="conn-redirect-count">10</strong> detik...
+          <span id="conn-redirect-inline" hidden>10</span>
+        </p>
       </div>
     </section>
-
-    <footer class="app-footer">
-      &copy; {{.Year}} {{if .Ad}}{{.Ad.Title}}{{else}}HotSpot Portal{{end}} System
-    </footer>
   </div>
 
   <!-- Hidden Hotspot login form: submitted to MikroTik on Connect -->
@@ -269,9 +168,6 @@
     <input type="hidden" name="popup" value="true">
   </form>
 
-  <!-- Config is delivered as inert JSON data (not executable JS). The browser
-       parses it with JSON.parse, so a malicious ?mac=/?link-login-only= value
-       can never break out into script execution. html/template still escapes it. -->
   <script id="portal-config" type="application/json">{{.PortalConfigJSON}}</script>
   <script src="/static/js/md5.js"></script>
   <script src="/static/js/portal.js"></script>

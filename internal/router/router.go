@@ -16,6 +16,7 @@ import (
 	"wifiads/internal/middleware"
 	"wifiads/internal/repository"
 	"wifiads/internal/service"
+	"wifiads/pkg/storage"
 	"wifiads/portal"
 )
 
@@ -36,8 +37,10 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 
 	// Repositories
 	adminUsers := repository.NewAdminUserRepository(db)
+	roles := repository.NewRoleRepository(db)
 	sites := repository.NewSiteRepository(db)
 	routers := repository.NewRouterRepository(db)
+	nasClients := repository.NewNASClientRepository(db)
 	advertisements := repository.NewAdvertisementRepository(db)
 	portalSessions := repository.NewPortalSessionRepository(db)
 	vouchers := repository.NewVoucherRepository(db)
@@ -45,6 +48,8 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 	connectProfiles := repository.NewConnectProfileRepository(db)
 	accounting := repository.NewAccountingRepository(db)
 	audits := repository.NewAuditLogRepository(db)
+	marketplace := repository.NewMarketplaceRepository(db)
+	partners := repository.NewPartnerRepository(db)
 
 	// Services
 	authService := service.NewAuthService(adminUsers, logger, cfg.JWT.Secret, cfg.JWT.Issuer, cfg.JWTExpiry())
@@ -65,11 +70,31 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 		DefaultSessionTimeout: cfg.Portal.SessionTimeoutSeconds,
 		AllowedLoginHosts:     cfg.Portal.AllowedLoginHosts,
 		DevMode:               cfg.Portal.DevMode,
+		Marketplace:           marketplace,
+		Partners:              partners,
 	})
-	adminService := service.NewAdminService(visitors, vouchers, accounting, portalSessions, connectProfiles, routers)
+	adminService := service.NewAdminService(visitors, vouchers, accounting, portalSessions, connectProfiles, routers, service.AdminServiceOptions{
+		NASClients:      nasClients,
+		Sites:           sites,
+		Marketplace:     marketplace,
+		Partners:        partners,
+		RadiusSecretKey: cfg.Keys.RadiusSecretKey,
+		PortalBaseURL:   cfg.Portal.PublicBaseURL,
+	})
 	profileService := service.NewProfileService(connectProfiles)
-	userService := service.NewUserService(adminUsers)
+	userService := service.NewUserService(adminUsers, roles)
 	adService := service.NewAdvertisementService(advertisements)
+	marketplaceService := service.NewMarketplaceService(marketplace, routers, accounting, logger, cfg.JWT.Secret, cfg.JWT.Issuer, cfg.JWTExpiry())
+	marketplaceService.SetPartnerRepository(partners)
+	partnerService := service.NewPartnerService(partners, marketplace, routers, accounting, logger, cfg.JWT.Secret, cfg.JWT.Issuer, cfg.JWTExpiry())
+
+	r2Client := storage.NewR2Client(storage.R2Options{
+		AccountID:       cfg.R2.AccountID,
+		AccessKeyID:     cfg.R2.AccessKeyID,
+		SecretAccessKey: cfg.R2.SecretAccessKey,
+		BucketName:      cfg.R2.BucketName,
+		PublicBaseURL:   cfg.R2.PublicURL,
+	})
 
 	// Handlers
 	authHandler := handler.NewAuthHandler(authService, cfg.JWT.CookieName, cfg.JWT.CookieSecure)
@@ -78,7 +103,10 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 	adminHandler := handler.NewAdminHandler(adminService)
 	profileHandler := handler.NewProfileHandler(profileService)
 	userHandler := handler.NewUserHandler(userService)
-	adHandler := handler.NewAdvertisementHandler(adService)
+	adHandler := handler.NewAdvertisementHandler(adService, r2Client)
+	marketplaceHandler := handler.NewMarketplaceHandler(marketplaceService, r2Client, cfg.JWT.CookieSecure)
+	partnerHandler := handler.NewPartnerHandler(partnerService, marketplaceHandler, cfg.JWT.CookieSecure)
+	mapTileHandler := handler.NewMapTileHandler(cfg.Portal.PublicBaseURL)
 	healthHandler := handler.NewHealthHandler(func(ctx context.Context) error {
 		sqlDB, err := db.DB()
 		if err != nil {
@@ -95,7 +123,9 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 	engine.Use(middleware.CORS(cfg.Portal.AllowedLoginHosts))
 	engine.SetHTMLTemplate(templates)
 	engine.StaticFS("/static", http.FS(staticFS))
-	engine.Static("/uploads", "./uploads")
+	engine.GET("/uploads/*filepath", adHandler.ServeMedia)
+	engine.HEAD("/uploads/*filepath", adHandler.ServeMedia)
+	engine.GET("/map-tiles/:z/:x/:y", mapTileHandler.ServeTile)
 
 	engine.GET("/health/live", healthHandler.Live)
 	engine.GET("/health/ready", healthHandler.Ready)
@@ -107,10 +137,12 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 	api := engine.Group("/api/v1")
 	api.Use(middleware.RateLimit(120, 0))
 	{
+		api.GET("/map-geocode", mapTileHandler.SearchPlace)
 		api.POST("/portal-sessions", portalHandler.CreateSession)
 		api.GET("/portal-sessions/:token", portalHandler.SessionStatus)
 		api.POST("/portal-sessions/:token/survey", portalHandler.SubmitSurvey)
 		api.POST("/portal-sessions/:token/connect", portalHandler.Connect)
+		api.GET("/portal-sessions/:token/click", portalHandler.ClickPromo)
 	}
 
 	admin := api.Group("/admin")
@@ -125,19 +157,21 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 	protected.Use(middleware.Auth(cfg.JWT.Secret, cfg.JWT.CookieName))
 	{
 		protected.GET("/auth/me", authHandler.Profile)
+		protected.PUT("/auth/password", userHandler.ChangeOwnPassword)
 		protected.POST("/vouchers", voucherHandler.Create)
 		protected.GET("/vouchers", voucherHandler.List)
 		protected.GET("/visitors", adminHandler.ListVisitors)
 		protected.GET("/sessions", adminHandler.ListSessions)
 		protected.GET("/overview", adminHandler.Overview)
 		protected.GET("/routers", adminHandler.ListRouters)
+		protected.POST("/routers", adminHandler.CreateRouter)
 		protected.PUT("/routers/:id/voucher-config", adminHandler.UpdateRouterVoucherConfig)
 		protected.GET("/profiles", profileHandler.List)
 		protected.GET("/profiles/:id", profileHandler.Get)
 		protected.POST("/profiles", profileHandler.Create)
 		protected.PUT("/profiles/:id", profileHandler.Update)
 
-		// Admin Users Management
+		// Admin Users & RBAC Roles Management
 		protected.GET("/users", userHandler.List)
 		protected.GET("/users/:id", userHandler.Get)
 		protected.POST("/users", userHandler.Create)
@@ -145,13 +179,108 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 		protected.PUT("/users/:id/password", userHandler.ChangePassword)
 		protected.DELETE("/users/:id", userHandler.Delete)
 
-		// Advertisements Management
+		protected.GET("/roles", userHandler.ListRoles)
+		protected.POST("/roles", userHandler.CreateRole)
+		protected.PUT("/roles/:id", userHandler.UpdateRole)
+		protected.DELETE("/roles/:id", userHandler.DeleteRole)
+
+		// Advertisements Management (Admin House Ads)
 		protected.GET("/advertisements", adHandler.List)
 		protected.GET("/advertisements/:id", adHandler.Get)
 		protected.POST("/advertisements", adHandler.Create)
 		protected.POST("/advertisements/upload", adHandler.UploadImage)
 		protected.PUT("/advertisements/:id", adHandler.Update)
 		protected.DELETE("/advertisements/:id", adHandler.Delete)
+
+		// Marketplace, Finance & Partner Management
+		protected.GET("/marketplace/badges", partnerHandler.AdminGetBadges)
+		protected.GET("/marketplace/finance", partnerHandler.AdminGetFinanceSummary)
+		protected.GET("/marketplace/wallet-transactions", partnerHandler.AdminListGlobalTransactions)
+		protected.GET("/marketplace/settings", marketplaceHandler.AdminGetSetting)
+		protected.PUT("/marketplace/settings", marketplaceHandler.AdminUpdateSetting)
+		protected.GET("/marketplace/tiers", marketplaceHandler.AdminListLocationTiers)
+		protected.POST("/marketplace/tiers", marketplaceHandler.AdminCreateLocationTier)
+		protected.PUT("/marketplace/tiers/:id", marketplaceHandler.AdminUpdateLocationTier)
+		protected.DELETE("/marketplace/tiers/:id", marketplaceHandler.AdminDeleteLocationTier)
+		protected.GET("/marketplace/payment-methods", marketplaceHandler.AdminListPaymentMethods)
+		protected.POST("/marketplace/payment-methods", marketplaceHandler.AdminCreatePaymentMethod)
+		protected.PUT("/marketplace/payment-methods/:id", marketplaceHandler.AdminUpdatePaymentMethod)
+		protected.DELETE("/marketplace/payment-methods/:id", marketplaceHandler.AdminDeletePaymentMethod)
+		protected.POST("/marketplace/payment-methods/upload-qris", marketplaceHandler.AdminUploadQRIS)
+		protected.GET("/marketplace/advertisers", marketplaceHandler.AdminListAdvertisers)
+		protected.PUT("/marketplace/advertisers/:id/status", marketplaceHandler.AdminToggleAdvertiserStatus)
+		protected.POST("/marketplace/advertisers/:id/adjust-balance", marketplaceHandler.AdminAdjustBalance)
+		protected.GET("/marketplace/campaigns", marketplaceHandler.AdminListCampaigns)
+		protected.PUT("/marketplace/campaigns/:id/moderate", marketplaceHandler.AdminModerateCampaign)
+		protected.GET("/marketplace/topups", marketplaceHandler.AdminListTopups)
+		protected.PUT("/marketplace/topups/:id/verify", marketplaceHandler.AdminVerifyTopup)
+
+		protected.GET("/partners", partnerHandler.AdminListPartners)
+		protected.POST("/partners", partnerHandler.AdminCreatePartner)
+		protected.GET("/partners/:id", partnerHandler.AdminGetPartner)
+		protected.PUT("/partners/:id", partnerHandler.AdminUpdatePartner)
+		protected.PUT("/partners/:id/password", partnerHandler.AdminChangePartnerPassword)
+		protected.DELETE("/partners/:id", partnerHandler.AdminDeletePartner)
+		protected.GET("/partners/withdrawals", partnerHandler.AdminListWithdrawals)
+		protected.PUT("/partners/withdrawals/:id/process", partnerHandler.AdminProcessWithdrawal)
+		protected.POST("/partners/withdrawals/upload-proof", partnerHandler.AdminUploadPayoutProof)
+	}
+
+	// Advertiser Client API (/api/v1/advertiser)
+	advPublic := api.Group("/advertiser")
+	{
+		advPublic.POST("/auth/register", middleware.RateLimit(10, 0), marketplaceHandler.Register)
+		advPublic.POST("/auth/login", middleware.RateLimit(10, 0), marketplaceHandler.Login)
+		advPublic.POST("/auth/logout", marketplaceHandler.Logout)
+	}
+
+	advProtected := advPublic.Group("")
+	advProtected.Use(middleware.AdvertiserAuth(cfg.JWT.Secret, handler.AdvertiserCookieName))
+	{
+		advProtected.GET("/auth/me", marketplaceHandler.GetProfile)
+		advProtected.PUT("/auth/profile", marketplaceHandler.UpdateProfile)
+		advProtected.PUT("/auth/password", marketplaceHandler.ChangePassword)
+
+		advProtected.GET("/config", marketplaceHandler.GetAdvertiserConfig)
+		advProtected.GET("/routers/map", marketplaceHandler.ListMapRouters)
+		advProtected.GET("/overview", marketplaceHandler.GetAdvertiserOverview)
+		advProtected.GET("/analytics", marketplaceHandler.GetAdvertiserAnalytics)
+
+		advProtected.POST("/media/upload", marketplaceHandler.UploadAdvertiserMedia)
+		advProtected.GET("/campaigns", marketplaceHandler.ListAdvertiserCampaigns)
+		advProtected.POST("/campaigns", marketplaceHandler.CreateCampaign)
+		advProtected.GET("/campaigns/:id", marketplaceHandler.GetAdvertiserCampaign)
+		advProtected.PUT("/campaigns/:id", marketplaceHandler.UpdateCampaign)
+		advProtected.PUT("/campaigns/:id/status", marketplaceHandler.ToggleAdvertiserCampaignStatus)
+		advProtected.DELETE("/campaigns/:id", marketplaceHandler.DeleteAdvertiserCampaign)
+
+		advProtected.POST("/topups/upload-proof", marketplaceHandler.UploadTopupProofFile)
+		advProtected.GET("/topups", marketplaceHandler.ListAdvertiserTopups)
+		advProtected.POST("/topups", marketplaceHandler.CreateTopup)
+		advProtected.PUT("/topups/:id/proof", marketplaceHandler.SubmitTopupProof)
+		advProtected.GET("/wallet/transactions", marketplaceHandler.ListAdvertiserWalletTransactions)
+	}
+
+	// Partner Venue Owner API (/api/v1/partner)
+	partnerPublic := api.Group("/partner")
+	{
+		partnerPublic.POST("/auth/login", middleware.RateLimit(10, 0), partnerHandler.Login)
+		partnerPublic.POST("/auth/logout", partnerHandler.Logout)
+	}
+
+	partnerProtected := partnerPublic.Group("")
+	partnerProtected.Use(middleware.PartnerAuth(cfg.JWT.Secret, handler.PartnerCookieName))
+	{
+		partnerProtected.GET("/auth/me", partnerHandler.GetProfile)
+		partnerProtected.PUT("/auth/profile", partnerHandler.UpdateProfile)
+		partnerProtected.PUT("/auth/password", partnerHandler.ChangePassword)
+
+		partnerProtected.GET("/overview", partnerHandler.GetOverview)
+		partnerProtected.GET("/ads", partnerHandler.ListAds)
+		partnerProtected.GET("/routers", partnerHandler.ListRouters)
+		partnerProtected.POST("/withdrawals", partnerHandler.CreateWithdrawal)
+		partnerProtected.GET("/withdrawals", partnerHandler.ListWithdrawals)
+		partnerProtected.GET("/wallet/transactions", partnerHandler.ListTransactions)
 	}
 
 	adminIndexHTML, err := fs.ReadFile(staticFS, "admin/index.html")
@@ -159,11 +288,15 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 		return nil, fmt.Errorf("read admin index html: %w", err)
 	}
 
-	adminSPA := func(c *gin.Context) {
+	spaHandler := func(c *gin.Context) {
 		c.Data(http.StatusOK, "text/html; charset=utf-8", adminIndexHTML)
 	}
-	engine.GET("/admin", adminSPA)
-	engine.GET("/admin/*path", adminSPA)
+	engine.GET("/admin", spaHandler)
+	engine.GET("/admin/*path", spaHandler)
+	engine.GET("/advertiser", spaHandler)
+	engine.GET("/advertiser/*path", spaHandler)
+	engine.GET("/partner", spaHandler)
+	engine.GET("/partner/*path", spaHandler)
 
 	return engine, nil
 }

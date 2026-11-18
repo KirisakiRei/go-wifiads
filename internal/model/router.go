@@ -15,6 +15,16 @@ type Router struct {
 	Status        string `gorm:"type:varchar(24);not null;default:'ACTIVE'" json:"status"`
 	Description   string `gorm:"type:varchar(255)" json:"description"`
 
+	// Physical Map Coordinates, Linked Venue Partner & Pricing Tier for Advertiser Marketplace
+	PartnerID           *string  `gorm:"type:uuid;index" json:"partner_id,omitempty"`
+	Latitude            *float64 `gorm:"type:double precision" json:"latitude,omitempty"`
+	Longitude           *float64 `gorm:"type:double precision" json:"longitude,omitempty"`
+	LocationAddress     string   `gorm:"type:varchar(255)" json:"location_address"`
+	VenueCategory       string   `gorm:"type:varchar(64);default:'Kafe'" json:"venue_category"`
+	LocationTierID      *string  `gorm:"type:uuid;index" json:"location_tier_id,omitempty"`
+	LocationTierAuto    bool     `gorm:"not null;default:true" json:"location_tier_auto"`
+	IsPublicMarketplace bool     `gorm:"not null;default:true" json:"is_public_marketplace"`
+
 	// Voucher Generation Configuration for this Router
 	VoucherPrefix         string  `gorm:"type:varchar(16);default:'WF-'" json:"voucher_prefix"`
 	VoucherDigitCount     int     `gorm:"default:6" json:"voucher_digit_count"`

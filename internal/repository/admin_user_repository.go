@@ -75,3 +75,54 @@ func (r *adminUserRepository) Count(ctx context.Context) (int64, error) {
 	}
 	return total, nil
 }
+
+type roleRepository struct {
+	db *gorm.DB
+}
+
+// NewRoleRepository builds the RBAC role repository.
+func NewRoleRepository(db *gorm.DB) RoleRepository {
+	return &roleRepository{db: db}
+}
+
+func (r *roleRepository) Create(ctx context.Context, role *model.Role) error {
+	if err := r.db.WithContext(ctx).Create(role).Error; err != nil {
+		if isUniqueViolation(err) {
+			return apperror.ErrAlreadyExists
+		}
+		return err
+	}
+	return nil
+}
+
+func (r *roleRepository) FindByID(ctx context.Context, id string) (*model.Role, error) {
+	var role model.Role
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&role).Error; err != nil {
+		return nil, translateNotFound(err)
+	}
+	return &role, nil
+}
+
+func (r *roleRepository) FindByName(ctx context.Context, name string) (*model.Role, error) {
+	var role model.Role
+	if err := r.db.WithContext(ctx).Where("LOWER(name) = LOWER(?)", name).First(&role).Error; err != nil {
+		return nil, translateNotFound(err)
+	}
+	return &role, nil
+}
+
+func (r *roleRepository) List(ctx context.Context) ([]model.Role, error) {
+	var roles []model.Role
+	if err := r.db.WithContext(ctx).Order("is_system DESC, created_at ASC").Find(&roles).Error; err != nil {
+		return nil, err
+	}
+	return roles, nil
+}
+
+func (r *roleRepository) Update(ctx context.Context, role *model.Role) error {
+	return r.db.WithContext(ctx).Save(role).Error
+}
+
+func (r *roleRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.Role{}).Error
+}

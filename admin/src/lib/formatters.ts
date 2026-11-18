@@ -19,3 +19,12 @@ export function formatBytes(value?: number | null): string {
   const exponent = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1)
   return `${(value / 1024 ** exponent).toFixed(exponent ? 1 : 0)} ${units[exponent]}`
 }
+
+export function formatRupiah(value?: number | null): string {
+  const num = Number(value ?? 0)
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(Number.isFinite(num) ? num : 0)
+}

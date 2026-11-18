@@ -1,323 +1,484 @@
 /* ==========================================================================
-   WiFiAds — Captive Portal (clean, blue, mobile-first)
+   WiFiAds — Clean, Responsive Captive Portal (Rewarded Ad + Minimal UI)
    ========================================================================== */
 
 :root {
   --brand: #2563eb;
-  --brand-strong: #1d4ed8;
+  --brand-hover: #1d4ed8;
   --brand-soft: #eff6ff;
-  --brand-soft-2: #dbeafe;
 
   --ink: #0f172a;
-  --ink-soft: #334155;
+  --ink-2: #334155;
   --muted: #64748b;
-  --muted-2: #94a3b8;
+  --muted-light: #94a3b8;
 
+  --bg: #f1f5f9;
   --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --border: #e5e9f0;
+  --surface-subtle: #f8fafc;
+  --border: #e2e8f0;
 
   --success: #16a34a;
-  --success-strong: #15803d;
-  --success-bg: #10b981;
+  --success-soft: #dcfce7;
 
   --danger: #dc2626;
   --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
 
   --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
-  --shadow-card: 0 10px 30px -12px rgba(37, 99, 235, 0.18), 0 2px 6px rgba(15, 23, 42, 0.04);
+  --radius-md: 12px;
+  --radius-lg: 18px;
 }
 
-*, *::before, *::after { box-sizing: border-box; }
+*, *::before, *::after {
+  box-sizing: border-box;
+}
 
-/* hidden wajib menang lawan display:flex/grid (brandbar, dsb). */
-[hidden] { display: none !important; }
-
-/* Halaman Ad dan Connected itu full takeover: header dan footer disembunyikan sepenuhnya */
-body.is-ad .brandbar,
-body.is-ad .app-footer,
-body.is-connected .brandbar,
-body.is-connected .app-footer {
+[hidden] {
   display: none !important;
 }
 
-body.is-ad .bg-decor,
-body.is-connected .bg-decor {
-  display: none !important;
-}
-
-body.is-ad .app,
-body.is-connected .app {
-  padding: 0 !important;
-  max-width: none !important;
-  width: 100vw !important;
-  min-height: 100vh !important;
-  min-height: 100dvh !important;
-}
-
-body {
+html, body {
   margin: 0;
+  padding: 0;
+  width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: var(--ink-soft);
-  background: var(--surface);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
 }
 
-/* ---------- Decorative background ---------- */
-.bg-decor {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
+body.is-ad {
+  background: #05070c;
   overflow: hidden;
-  z-index: 0;
-}
-.shape { position: absolute; border-radius: 50%; }
-.shape-lg {
-  width: 260px; height: 260px;
-  top: -60px; right: -90px;
-  background: radial-gradient(circle at 30% 30%, #eef4ff, #eaf1fe);
-}
-.shape-md {
-  width: 210px; height: 210px;
-  top: 42%; right: -70px;
-  background: radial-gradient(circle at 30% 30%, #eef4ff, #eaf1fe);
-  opacity: 0.9;
-}
-.shape-sm {
-  width: 14px; height: 14px;
-  top: 50%; left: 26%;
-  background: #dbe7ff;
-}
-.shape-dot {
-  width: 8px; height: 8px;
-  bottom: 12%; left: 8%;
-  background: #e3ecff;
-}
-.shape-line {
-  width: 150px; height: 2px;
-  top: 22%; left: calc(50% + 90px);
-  border-radius: 2px;
-  background: linear-gradient(90deg, #dbe7ff, transparent);
-  transform: rotate(35deg);
 }
 
-/* ---------- App shell ---------- */
+/* ---------- App Container ---------- */
 .app {
-  position: relative;
-  z-index: 1;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding: 14px 18px 0;
-  width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
-}
-
-.brandbar, .app-footer { width: 100%; }
-
-/* ---------- Brand bar ---------- */
-/* Slim, nempel kiri: biar gak makan tempat di layar iklan/connected. */
-.brandbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  padding: 4px 2px 12px;
-}
-.brand-logo {
-  display: inline-flex;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  align-items: center;
   justify-content: center;
-  color: #fff;
-  box-shadow: 0 6px 14px -6px rgba(37, 99, 235, 0.6);
+  padding: 20px 16px;
 }
-.brand-logo svg { width: 18px; height: 18px; }
-.brand-name {
-  font-weight: 700;
-  font-size: 0.98rem;
-  color: var(--ink);
-  letter-spacing: -0.01em;
+
+body.is-ad .app {
+  padding: 0;
 }
 
 /* ---------- Screens ---------- */
 .screen {
   display: none;
-  flex: 1;
-  flex-direction: column;
+  width: 100%;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  min-width: 0;
-  animation: fade-in 0.35s ease both;
+  animation: screen-fade 0.22s ease-out both;
 }
-.screen.is-active { display: flex; }
 
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
+.screen.is-active {
+  display: flex;
+}
+
+@keyframes screen-fade {
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ---------- Screen 1: Welcome ---------- */
-.hero {
+/* ---------- Shared Card Component ---------- */
+.portal-card {
+  width: 100%;
+  max-width: 410px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px 24px;
+  box-shadow: 0 4px 20px -4px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.03);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  width: 100%;
-  max-width: 420px;
-  padding: 24px 0 40px;
 }
-.hero-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 18px;
-  background: var(--brand-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--brand);
-  margin-bottom: 26px;
-}
-.hero-icon svg { width: 34px; height: 34px; }
 
-.hero-title {
-  font-size: 1.9rem;
-  font-weight: 800;
+.card-title {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+  font-weight: 700;
   color: var(--ink);
-  margin: 0 0 12px;
-  letter-spacing: -0.03em;
-}
-.hero-subtitle {
-  font-size: 0.92rem;
-  color: var(--muted);
-  line-height: 1.55;
-  margin: 0 0 30px;
-  max-width: 300px;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
-/* ---------- Primary button ---------- */
+.card-subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.card-subtitle strong {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+/* ---------- Buttons ---------- */
 .btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  max-width: 340px;
-  padding: 15px 24px;
+  min-height: 46px;
+  padding: 12px 20px;
   border: none;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, #3b82f6, var(--brand));
-  color: #fff;
-  font-size: 0.98rem;
-  font-weight: 600;
+  background: var(--brand);
+  color: #ffffff;
   font-family: inherit;
+  font-size: 0.94rem;
+  font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
-  box-shadow: 0 12px 24px -10px rgba(37, 99, 235, 0.65);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
-}
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 16px 28px -10px rgba(37, 99, 235, 0.7); }
-.btn-primary:active { transform: translateY(0); }
-.btn-primary:disabled {
-  background: #c7d6f6;
-  box-shadow: none;
-  cursor: not-allowed;
-  transform: none;
+  transition: background-color 0.15s ease, transform 0.1s ease;
 }
 
-/* ---------- Screen 2: Ad Fullscreen (Landscape Edge-to-Edge & Portrait Split 50:50) ---------- */
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.btn-primary:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---------- Notices ---------- */
+.notice {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  color: var(--ink-2);
+  margin-bottom: 14px;
+}
+
+.notice.error {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+/* ==========================================================================
+   SCREEN 1: WELCOME
+   ========================================================================== */
+.welcome-card {
+  text-align: center;
+  align-items: center;
+}
+
+.wifi-brand-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+
+.wifi-brand-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.welcome-card .card-subtitle {
+  margin-bottom: 24px;
+  max-width: 320px;
+}
+
+.card-footer-meta {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  width: 100%;
+  font-size: 0.76rem;
+  color: var(--muted-light);
+}
+
+/* ==========================================================================
+   SCREEN 2: REWARDED AD (IN-GAME / IN-APP FULLSCREEN AD + CLEAN TIMER PILL)
+   ========================================================================== */
 .screen-ad {
   position: fixed;
   inset: 0;
   width: 100vw;
   height: 100vh;
   height: 100dvh;
-  z-index: 50;
-  background: #0b0f19;
-  overflow: hidden;
+  z-index: 100;
+  background: #05070c;
   padding: 0;
   margin: 0;
 }
 
-/* Floating Preview Toggle Bar (di atas tengah, sleek translucent pill) */
-.ad-preview-bar {
-  position: absolute;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 70;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.78);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
-}
-.ad-preview-bar[hidden] { display: none !important; }
-.ad-preview-label {
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  font-size: 0.68rem;
-  color: #94a3b8;
-  white-space: nowrap;
-}
-.seg {
-  display: inline-flex;
-  gap: 3px;
-  padding: 2px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-}
-.seg-btn {
-  border: none;
-  background: transparent;
-  padding: 4px 12px;
-  border-radius: 999px;
-  font: inherit;
-  font-size: 0.74rem;
-  font-weight: 600;
-  color: #cbd5e1;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-.seg-btn:hover:not(.is-active) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-}
-.seg-btn.is-active {
-  background: var(--brand);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.5);
-}
-
-/* Container panggung iklan */
 .ad-stage {
   position: relative;
   width: 100%;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
+  background: #05070c;
 }
 
-/* Media placeholder default */
+/* Top HUD Bar (In-App Rewarded Ad Style) */
+.ad-hud-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: max(14px, env(safe-area-inset-top)) 16px 14px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0) 100%);
+  pointer-events: none;
+}
+
+.ad-sponsor-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.ad-sponsor-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #38bdf8;
+}
+
+.ad-reward-control {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+}
+
+/* Countdown Timer Pill */
+.ad-timer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px 0 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.ad-timer-ring-wrap {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ad-timer-svg {
+  width: 22px;
+  height: 22px;
+  transform: rotate(-90deg);
+}
+
+.ad-timer-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 12;
+}
+
+.ad-timer-progress {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 12;
+  stroke-linecap: round;
+  stroke-dasharray: 326.7;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.95s linear;
+}
+
+.ad-timer-num {
+  position: absolute;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.ad-timer-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+}
+
+.ad-timer-label strong {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+/* Next / Skip Button (Appears when countdown hits 0) */
+.ad-next-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0f172a;
+  border: none;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  transition: transform 0.12s ease, background-color 0.15s ease;
+}
+
+.ad-next-btn:hover {
+  background: #f1f5f9;
+  transform: translateY(-1px);
+}
+
+.ad-next-btn:active {
+  transform: translateY(0);
+}
+
+.screen-ad:not(.is-ready) .ad-next-btn {
+  display: none !important;
+}
+
+.screen-ad:not(.is-ready) .ad-timer-pill {
+  display: inline-flex !important;
+}
+
+.screen-ad.is-ready .ad-timer-pill {
+  display: none !important;
+}
+
+.screen-ad.is-ready .ad-next-btn {
+  display: inline-flex !important;
+  animation: pill-pop 0.2s ease-out both;
+}
+
+@keyframes pill-pop {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Ad Media Container — Full Width for Landscape on Mobile, Never Stretched */
+.ad-media-wrap {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+}
+
+.ad-media-wrap img,
+.ad-media-wrap video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100vw;
+  max-height: 100dvh;
+  object-fit: contain;
+  object-position: center;
+}
+
+/* Mobile specific: Landscape media spans 100% full width without stretching height */
+@media (max-width: 768px) {
+  .screen-ad.ad-layout--landscape .ad-media-wrap img,
+  .screen-ad.ad-layout--landscape .ad-media-wrap video,
+  .screen-ad.is-landscape-media .ad-media-wrap img,
+  .screen-ad.is-landscape-media .ad-media-wrap video {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 100dvh !important;
+    object-fit: contain !important;
+  }
+
+  .screen-ad.ad-layout--portrait:not(.is-landscape-media) .ad-media-wrap img,
+  .screen-ad.ad-layout--portrait:not(.is-landscape-media) .ad-media-wrap video {
+    width: 100%;
+    height: 100%;
+    max-height: 100dvh;
+    object-fit: contain;
+  }
+}
+
 .ad-placeholder {
   width: 100%;
   height: 100%;
@@ -325,852 +486,275 @@ body {
   align-items: center;
   justify-content: center;
   color: #475569;
-  background: #0f172a;
 }
-.ad-placeholder svg { width: 56px; height: 56px; }
 
-/* Notice / alert error di layar iklan */
+.ad-placeholder svg {
+  width: 48px;
+  height: 48px;
+}
+
+/* Subtle Bottom Caption (Non-intrusive) */
+.ad-caption-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding: 28px 18px max(16px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.35) 60%, rgba(0, 0, 0, 0) 100%);
+  pointer-events: none;
+}
+
+.ad-caption-inner {
+  max-width: 600px;
+}
+
+.ad-caption-title {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 2px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.ad-caption-body {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.4;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .notice-ad {
   position: absolute;
-  bottom: 84px;
+  bottom: 72px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 80;
+  z-index: 40;
   width: calc(100% - 32px);
-  max-width: 440px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-/* ==========================================================================
-   MODE 1: LANDSCAPE (FULLSCREEN PAS WINDOW + YOUTUBE STYLE ADS COUNTER)
-   ========================================================================== */
-.screen-ad.ad-layout--landscape .ad-stage {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #0b0f19;
-  width: 100%;
-  height: 100%;
-  position: relative;
-  overflow: hidden;
-}
-
-/* Media wrap diberi padding atas & bawah agar iklan pas window & tidak tertutup overlay */
-.screen-ad.ad-layout--landscape .ad-media-wrap {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 56px 32px 100px;
-  box-sizing: border-box;
-  overflow: hidden;
-  z-index: 1;
-}
-
-/* Gambar iklan pas window, tidak meluber atau kepotong */
-.screen-ad.ad-layout--landscape .ad-media-wrap img,
-.screen-ad.ad-layout--landscape .ad-media-wrap video {
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  object-position: center;
-  display: block;
-  border-radius: 12px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
-}
-
-/* Gradasi hitam bawah halus di bagian bawah saja */
-.screen-ad.ad-layout--landscape .ad-stage::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 140px;
-  pointer-events: none;
-  background: linear-gradient(to top, rgba(11, 15, 25, 0.95) 0%, rgba(11, 15, 25, 0.45) 45%, transparent 100%);
-  z-index: 10;
-}
-
-/* Sembunyikan panel samping di mode landscape */
-.screen-ad.ad-layout--landscape .ad-side-panel {
-  display: none !important;
-}
-
-/* Overlay landscape bawah: Info sponsor di kiri, tombol/counter YouTube di kanan */
-.screen-ad.ad-layout--landscape .ad-overlay-landscape {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 20;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 20px 32px;
-  pointer-events: none;
-}
-.ad-info-pill {
-  max-width: 55%;
-  color: #fff;
-  pointer-events: auto;
-}
-.ad-tag {
-  display: inline-block;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #fff;
-  background: var(--brand);
-  padding: 3px 8px;
-  border-radius: 6px;
-  margin-bottom: 6px;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
-}
-.ad-title {
-  display: block;
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #fff;
-  margin-bottom: 4px;
-  letter-spacing: -0.02em;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
-}
-.ad-text {
-  margin: 0;
-  font-size: 0.88rem;
-  color: rgba(255, 255, 255, 0.85);
-  line-height: 1.45;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
-}
-
-.ad-action-pill {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-shrink: 0;
-  pointer-events: auto;
-}
-
-/* YouTube Ads Counter (Pill ramping, rapi, dan proporsional saat hitungan berjalan) */
-.yt-counter {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  height: 38px;
-  padding: 0 16px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
-}
-.yt-spinner {
-  position: relative;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.yt-ring {
-  width: 20px;
-  height: 20px;
-  transform: rotate(-90deg);
-  display: block;
-}
-.yt-ring-track {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.22);
-  stroke-width: 14;
-}
-.yt-ring-progress {
-  fill: none;
-  stroke: #3b82f6;
-  stroke-width: 14;
-  stroke-linecap: round;
-  stroke-dasharray: 326.7;
-  stroke-dashoffset: 0;
-  transition: stroke-dashoffset 0.95s linear;
-}
-.yt-counter-text {
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: #f1f5f9;
-  white-space: nowrap;
-  line-height: 1;
-}
-.yt-counter-text strong {
-  color: #fff;
-  font-weight: 800;
-}
-
-/* Tombol Hubungkan di Landscape */
-.btn-yt-connect {
-  width: auto;
-  min-width: 210px;
-  height: 42px;
-  padding: 0 24px;
-  border-radius: 999px;
-  font-size: 0.92rem;
-  font-weight: 700;
-  white-space: nowrap;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 6px 20px -2px rgba(37, 99, 235, 0.65);
-  cursor: pointer;
-}
-
-/* Gaya YouTube ad: saat countdown berjalan, tombol connect disembunyikan,
-   dan saat is-ready (countdown selesai), tombol menyala dan counter disembunyikan */
-.screen-ad.ad-layout--landscape:not(.is-ready) .btn-yt-connect {
-  display: none !important;
-}
-.screen-ad.ad-layout--landscape:not(.is-ready) .yt-counter {
-  display: inline-flex !important;
-}
-.screen-ad.ad-layout--landscape.is-ready .yt-counter {
-  display: none !important;
-}
-.screen-ad.ad-layout--landscape.is-ready .btn-yt-connect {
-  display: inline-flex !important;
-  animation: pop-in 0.25s ease both;
-}
-
-@keyframes pop-in {
-  from { opacity: 0; transform: scale(0.94); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-/* ==========================================================================
-   MODE 2: PORTRAIT (SPLIT 50:50 — KIRI FULL IKLAN, KANAN COUNTER & NEXT)
-   ========================================================================== */
-.screen-ad.ad-layout--portrait .ad-overlay-landscape {
-  display: none !important;
-}
-.screen-ad.ad-layout--portrait .ad-stage {
-  display: flex;
-  flex-direction: row;
-  width: 100%;
-  height: 100%;
-  background: #fff;
-}
-/* Bagian kiri: Iklan pas window di 50% kiri */
-.screen-ad.ad-layout--portrait .ad-media-wrap {
-  flex: 1 1 50%;
-  width: 50%;
-  height: 100%;
-  background: #0b0f19;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 32px;
-  box-sizing: border-box;
-  overflow: hidden;
-  position: relative;
-}
-.screen-ad.ad-layout--portrait .ad-media-wrap img,
-.screen-ad.ad-layout--portrait .ad-media-wrap video {
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  object-position: center;
-  display: block;
-  border-radius: 12px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
-}
-/* Bagian kanan: Counter dan tombol action */
-.screen-ad.ad-layout--portrait .ad-side-panel {
-  flex: 1 1 50%;
-  width: 50%;
-  height: 100%;
-  background: #ffffff;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 48px 40px;
-  box-sizing: border-box;
-  position: relative;
-  z-index: 20;
-  border-left: 1px solid var(--border);
-}
-.ad-side-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 24px;
-}
-.brand-logo--sm {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-}
-.brand-logo--sm svg { width: 16px; height: 16px; }
-
-.ad-side-content {
-  text-align: center;
   max-width: 400px;
-  margin-bottom: 32px;
-}
-.ad-side-title {
-  font-size: 1.65rem;
-  font-weight: 800;
-  color: var(--ink);
-  margin: 0 0 10px;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
-}
-.ad-side-text {
-  font-size: 0.95rem;
-  color: var(--muted);
-  line-height: 1.55;
-  margin: 0;
-}
-
-.ad-side-action {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  max-width: 360px;
-}
-.countdown-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 26px;
-}
-.countdown-ring {
-  position: relative;
-  width: 110px;
-  height: 110px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.ring {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-.ring-track { fill: none; stroke: #eef2f8; stroke-width: 8; }
-.ring-progress {
-  fill: none;
-  stroke: var(--brand);
-  stroke-width: 8;
-  stroke-linecap: round;
-  stroke-dasharray: 326.7;
-  stroke-dashoffset: 0;
-  transition: stroke-dashoffset 0.95s linear;
-}
-.countdown-number {
-  font-size: 2.3rem;
-  font-weight: 800;
-  color: var(--ink);
-  letter-spacing: -0.03em;
-}
-.countdown-label {
-  margin: 12px 0 0;
-  font-size: 0.85rem;
-  color: var(--muted);
-  text-align: center;
-}
-.countdown-label strong { color: var(--ink); }
-
-.btn-side-connect {
-  width: 100%;
-  max-width: 340px;
-}
-
-/* Responsif Portrait di layar sempit / HP vertikal */
-@media (max-width: 768px) {
-  .screen-ad.ad-layout--landscape .ad-overlay-landscape {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 16px 20px;
-    gap: 14px;
-  }
-  .ad-info-pill { max-width: 100%; }
-  .ad-action-pill { align-items: stretch; width: 100%; }
-  .yt-counter { justify-content: center; width: 100%; }
-  .btn-yt-connect { width: 100%; text-align: center; }
-
-  .screen-ad.ad-layout--portrait .ad-stage {
-    flex-direction: column;
-  }
-  .screen-ad.ad-layout--portrait .ad-media-wrap {
-    flex: 1 1 50%;
-    width: 100%;
-    height: 50%;
-    padding: 24px 16px;
-  }
-  .screen-ad.ad-layout--portrait .ad-side-panel {
-    flex: 1 1 50%;
-    width: 100%;
-    height: 50%;
-    border-left: none;
-    border-top: 1px solid var(--border);
-    padding: 20px 24px;
-    justify-content: space-around;
-  }
-  .ad-side-header { margin-bottom: 8px; }
-  .ad-side-content { margin-bottom: 12px; }
-  .ad-side-title { font-size: 1.25rem; margin-bottom: 4px; }
-  .ad-side-text { font-size: 0.82rem; }
-  .countdown-block { margin-bottom: 12px; }
-  .countdown-ring { width: 68px; height: 68px; }
-  .countdown-number { font-size: 1.5rem; }
-  .countdown-label { margin-top: 6px; font-size: 0.75rem; }
 }
 
 /* ==========================================================================
-   SCREEN 2.5: SURVEY / TIER SELECTION (MODERN CARD & CLEAR OPTIONS)
+   SCREEN 3: CONNECT / SURVEY (CLEAN, ZERO AI SLOP, RESPONSIVE)
    ========================================================================== */
-.screen-survey {
-  display: none;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 30px 20px 48px;
-  box-sizing: border-box;
-}
-.screen-survey.is-active {
-  display: flex !important;
-}
-
 .survey-card {
-  width: 100%;
-  max-width: 440px;
-  background: #ffffff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 32px 28px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
-  box-sizing: border-box;
-  animation: fade-in 0.3s ease both;
+  gap: 18px;
 }
 
 .survey-header {
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-.survey-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1d4ed8;
-  font-size: 0.78rem;
-  font-weight: 700;
-  padding: 4px 12px;
-  border-radius: 999px;
-  margin-bottom: 12px;
-  letter-spacing: 0.02em;
-}
-.survey-badge .badge-icon {
-  font-size: 0.95rem;
-}
-
-.survey-title {
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: var(--ink);
-  margin: 0 0 8px;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-}
-
-.survey-subtitle {
-  font-size: 0.88rem;
-  color: var(--muted);
-  line-height: 1.5;
-  margin: 0;
-}
-
-.tier-comparison {
-  margin-bottom: 22px;
-}
-
-.tier-box--premium {
-  background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
-  border: 1.5px solid #86efac;
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
   text-align: left;
 }
 
-.tier-header {
+.speed-tiers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.speed-tier {
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.tier-name {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: #166534;
+.speed-tier--highlight {
+  border-color: #bfdbfe;
+  background: #f8fbff;
 }
 
-.tier-badge {
-  font-size: 0.7rem;
-  font-weight: 700;
-  background: #22c55e;
-  color: #ffffff;
-  padding: 2px 8px;
-  border-radius: 999px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.speed-tier-name {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--muted);
 }
 
-.tier-speed {
+.speed-tier--highlight .speed-tier-name {
+  color: var(--brand);
+}
+
+.speed-tier-val {
   font-size: 0.88rem;
-  color: #15803d;
-  margin-bottom: 4px;
-}
-.tier-speed strong {
-  font-weight: 800;
+  font-weight: 700;
+  color: var(--ink);
 }
 
-.tier-note {
-  font-size: 0.78rem;
-  color: #166534;
-  margin: 0;
-  opacity: 0.9;
+.speed-tier-desc {
+  font-size: 0.72rem;
+  color: var(--muted-light);
 }
 
 .survey-form {
   display: flex;
   flex-direction: column;
-  width: 100%;
+  gap: 14px;
 }
 
 .form-group {
-  margin-bottom: 16px;
-  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .form-label {
-  display: block;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  color: var(--ink);
-  margin-bottom: 6px;
+  color: var(--ink-2);
 }
 
 .form-input {
   width: 100%;
-  padding: 12px 14px;
-  font-size: 0.92rem;
+  height: 44px;
+  padding: 0 13px;
+  font-size: 16px; /* Prevents iOS auto-zoom on focus */
   font-family: inherit;
   color: var(--ink);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid #cbd5e1;
   border-radius: var(--radius-sm);
-  box-sizing: border-box;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .form-input:focus {
   outline: none;
-  background: #ffffff;
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .form-input::placeholder {
   color: #94a3b8;
+  font-size: 0.9rem;
 }
 
-.notice-survey {
-  margin-bottom: 14px;
-}
-
-.btn-survey-submit {
-  width: 100%;
-  max-width: 100%;
-  padding: 14px 20px;
-  font-size: 0.95rem;
+.survey-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin-top: 4px;
 }
 
-.btn-link-skip {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  font-size: 0.84rem;
-  font-weight: 600;
-  text-align: center;
-  padding: 12px 8px 4px;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  transition: color 0.15s ease;
-  font-family: inherit;
-}
-.btn-link-skip:hover {
-  color: var(--ink);
-}
-.btn-link-skip:disabled {
-  color: #cbd5e1;
-  cursor: not-allowed;
-  text-decoration: none;
-}
-
 /* ==========================================================================
-   SCREEN 3: CONNECTED (HERO BANNER ELEGAN & DETAIL CARD PROPORSIONAL)
+   SCREEN 4: CONNECTED (COMPACT, RESPONSIVE 2x2 GRID)
    ========================================================================== */
-.screen-connected {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  z-index: 60;
-  background: var(--surface-2);
-  display: none;
-  flex-direction: column;
-  justify-content: flex-start;
-  overflow-y: auto;
-  padding: 0;
-  margin: 0;
-}
-.screen-connected.is-active {
-  display: flex !important;
-}
-
-/* Hero Banner Hijau Full-width yang Proporsional (bukan 52vh berlebihan) */
-.connected-hero {
-  width: 100%;
-  background: linear-gradient(135deg, #16a34a, #10b981);
-  color: #fff;
-  padding: 44px 28px 38px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.connected-card {
   text-align: center;
-  gap: 18px;
-  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.2);
+  align-items: center;
 }
 
-.success-check {
-  width: 56px;
-  height: 56px;
+.connected-icon {
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--success-soft);
+  color: var(--success);
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  color: #fff;
-}
-.success-check svg { width: 28px; height: 28px; }
-
-.connected-copy {
-  max-width: 520px;
-}
-.connected-title {
-  font-size: 1.85rem;
-  font-weight: 800;
-  color: #fff;
-  margin: 0 0 6px;
-  letter-spacing: -0.02em;
-}
-.connected-subtitle {
-  font-size: 0.95rem;
-  margin: 0;
-  color: rgba(255, 255, 255, 0.94);
-}
-.connected-subtitle strong {
-  font-weight: 800;
+  margin-bottom: 14px;
 }
 
-/* Redirect countdown banner (Frosted Glass Pill) */
-.connected-redirect {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 999px;
-  padding: 8px 16px;
-  backdrop-filter: blur(4px);
-  flex-shrink: 0;
-}
-.redirect-ring {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.redirect-svg {
-  position: absolute;
-  inset: 0;
-  width: 40px;
-  height: 40px;
-  transform: rotate(-90deg);
-}
-.redirect-track { fill: none; stroke: rgba(255, 255, 255, 0.35); stroke-width: 4; }
-.redirect-progress {
-  fill: none;
-  stroke: #ffffff;
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-dasharray: 125.6;
-  stroke-dashoffset: 0;
-  transition: stroke-dashoffset 0.95s linear;
-}
-.redirect-number {
-  font-size: 0.88rem;
-  font-weight: 800;
-  color: #ffffff;
-}
-.redirect-text {
-  font-size: 0.85rem;
-  color: #ffffff;
-  line-height: 1.35;
-}
-.redirect-text strong {
-  color: #ffffff;
-  font-weight: 800;
-}
-.btn-redirect {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 18px;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #15803d;
-  font-size: 0.85rem;
-  font-weight: 700;
-  text-decoration: none;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: background 0.15s ease, transform 0.12s ease;
-}
-.btn-redirect:hover {
-  background: #f0fdf4;
-  transform: translateY(-1px);
+.connected-icon svg {
+  width: 24px;
+  height: 24px;
 }
 
-/* Detail Card di Bawah Hero */
-.connected-body {
-  width: 100%;
-  max-width: 760px;
-  padding: 32px 20px 48px;
-  margin: 0 auto;
+.connected-card .card-subtitle {
+  margin-bottom: 20px;
 }
 
-.connected-detail {
-  background: #ffffff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 24px 28px;
-  box-shadow: var(--shadow-sm);
-}
-
-.connected-grid {
+.session-stats-grid {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 14px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
 }
-.fact-box {
-  background: var(--surface-2);
+
+.stat-cell {
+  background: var(--surface-subtle);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 14px 10px;
+  padding: 11px 12px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  text-align: center;
+  align-items: flex-start;
+  text-align: left;
+  gap: 3px;
 }
-.fact-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+
+.stat-label {
+  font-size: 0.72rem;
+  font-weight: 600;
   color: var(--muted);
 }
-.fact-val {
-  font-size: 0.95rem;
+
+.stat-value {
+  font-size: 0.92rem;
   font-weight: 700;
   color: var(--ink);
-  word-break: break-word;
-}
-.fact-val.mono {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-  font-size: 0.88rem;
-  background: #e2e8f0;
-  border: 1px solid #dbe3ee;
-  border-radius: 6px;
-  padding: 2px 8px;
+  word-break: break-all;
 }
 
-.connected-note {
-  font-size: 0.8rem;
+.stat-value.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.86rem;
+}
+
+.session-expiry-bar {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
   color: var(--muted);
-  line-height: 1.5;
-  margin: 0;
-  text-align: center;
+  margin-bottom: 18px;
 }
 
-/* Tablet & Desktop Layout untuk Connected Hero: Row proporsional */
-@media (min-width: 720px) {
-  .connected-hero {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    text-align: left;
-    column-gap: 40px;
-    row-gap: 20px;
-    padding: 48px 40px;
+.session-expiry-bar strong {
+  color: var(--ink-2);
+}
+
+.redirect-hint {
+  margin: 12px 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.redirect-hint strong {
+  color: var(--ink-2);
+}
+
+/* ---------- Mobile Adjustments ---------- */
+@media (max-width: 420px) {
+  .app {
+    padding: 12px;
+  }
+  .portal-card {
+    padding: 22px 18px;
+  }
+  .card-title {
+    font-size: 1.22rem;
+  }
+  .speed-tiers {
+    gap: 8px;
+  }
+  .speed-tier {
+    padding: 10px;
   }
 }
 
-@media (max-width: 600px) {
-  .connected-hero { padding: 32px 18px 24px; gap: 14px; }
-  .connected-title { font-size: 1.45rem; }
-  .connected-subtitle { font-size: 0.85rem; }
-  .connected-redirect { flex-direction: column; border-radius: var(--radius-md); width: 100%; text-align: center; }
-  .btn-redirect { width: 100%; }
-  .connected-grid { grid-template-columns: 1fr; gap: 8px; }
-  .fact-box { flex-direction: row; justify-content: space-between; padding: 10px 14px; }
-  .connected-body { padding: 20px 16px 36px; }
-}
-
-/* ---------- Motion preferences ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .screen, .btn-primary, .ring-progress, .redirect-progress {
+  .screen, .btn-primary, .ad-timer-progress {
     animation: none !important;
     transition: none !important;
   }

@@ -28,21 +28,20 @@ func NewPortalHandler(portal service.PortalService, adDurationSeconds int) *Port
 // ShowPortalPage renders the captive portal shell. All Hotspot parameters stay
 // in the browser and are posted back explicitly by the page script.
 func (h *PortalHandler) ShowPortalPage(c *gin.Context) {
-	ad, err := h.portal.CurrentAdvertisement(c.Request.Context())
+	nasIdentifier := c.DefaultQuery("nasid", c.Query("nas-identifier"))
+	ad, err := h.portal.SelectAdvertisementForRouter(c.Request.Context(), nasIdentifier)
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 
-	// Hand the untrusted Hotspot context to the page as inert JSON data. It is
-	// embedded in a <script type="application/json"> block and parsed with
-	// JSON.parse, so values coming from the query string can never be executed
-	// as script (defence-in-depth on top of html/template escaping).
 	adLayout := "landscape"
 	adDur := h.adDurationSeconds
 	isVideo := false
+	adID := ""
 
 	if ad != nil {
+		adID = ad.ID
 		if ad.LayoutMode != "" {
 			adLayout = ad.LayoutMode
 		}
@@ -56,6 +55,7 @@ func (h *PortalHandler) ShowPortalPage(c *gin.Context) {
 	}
 
 	configJSON, err := json.Marshal(gin.H{
+		"adId":          adID,
 		"adDuration":    adDur,
 		"adLayout":      adLayout,
 		"isVideo":       isVideo,
@@ -66,7 +66,7 @@ func (h *PortalHandler) ShowPortalPage(c *gin.Context) {
 		"linkOrig":      c.DefaultQuery("link-orig", c.Query("dst")),
 		"chapId":        c.Query("chap-id"),
 		"chapChallenge": c.Query("chap-challenge"),
-		"nasIdentifier": c.DefaultQuery("nasid", c.Query("nas-identifier")),
+		"nasIdentifier": nasIdentifier,
 	})
 	if err != nil {
 		writeError(c, err)
@@ -133,4 +133,14 @@ func (h *PortalHandler) SubmitSurvey(c *gin.Context) {
 		return
 	}
 	httpx.OK(c, "Survey submitted", res)
+}
+
+// ClickPromo records an ad click and redirects the visitor to the advertiser's promo URL.
+func (h *PortalHandler) ClickPromo(c *gin.Context) {
+	targetURL, err := h.portal.RecordPromoClick(c.Request.Context(), c.Param("token"))
+	if err != nil || strings.TrimSpace(targetURL) == "" {
+		c.Redirect(http.StatusFound, "https://www.google.com")
+		return
+	}
+	c.Redirect(http.StatusFound, targetURL)
 }

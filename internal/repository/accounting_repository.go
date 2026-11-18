@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -78,6 +79,20 @@ func (r *accountingRepository) ApplyInterim(ctx context.Context, nasIdentifier, 
 // ApplyStop closes the session.
 func (r *accountingRepository) ApplyStop(ctx context.Context, nasIdentifier, acctSessionID string, updates AccountingUpdates) (*model.AccountingSession, error) {
 	return r.applyUpdate(ctx, nasIdentifier, acctSessionID, updates)
+}
+
+func (r *accountingRepository) CloseOtherActiveByMAC(ctx context.Context, mac, keepAcctSessionID string, at time.Time) error {
+	if mac == "" {
+		return nil
+	}
+	return r.db.WithContext(ctx).Model(&model.AccountingSession{}).
+		Where("calling_station_id = ? AND acct_session_id <> ? AND status IN ?", mac, keepAcctSessionID, []string{model.AccountingSessionStatusActive, model.AccountingSessionStatusStale}).
+		Updates(map[string]any{
+			"status":             model.AccountingSessionStatusClosed,
+			"stopped_at":         at,
+			"last_accounting_at": at,
+			"terminate_cause":    "Replaced-By-New-Session",
+		}).Error
 }
 
 func (r *accountingRepository) applyUpdate(ctx context.Context, nasIdentifier, acctSessionID string, updates AccountingUpdates) (*model.AccountingSession, error) {

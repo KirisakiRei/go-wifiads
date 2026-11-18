@@ -1,4 +1,4 @@
-import { Router, Shield } from 'lucide-react'
+import { Router } from 'lucide-react'
 import { LoginForm } from '@/features/auth/components/login-form'
 
 export function LoginPage() {
@@ -57,31 +57,13 @@ export function LoginPage() {
               AdWave WiFi
             </span>
             <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }}>
-              MikroTik AdOps
+              Manajemen Wi-Fi &amp; Iklan
             </span>
           </div>
         </div>
-
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.35rem',
-            padding: '0.25rem 0.65rem',
-            borderRadius: '9999px',
-            background: '#eff6ff',
-            color: '#1e40af',
-            fontSize: '11px',
-            fontWeight: 700,
-            border: '1px solid #dbeafe',
-          }}
-        >
-          <Shield size={12} color="#1d4ed8" />
-          Portal Terlindungi
-        </span>
       </header>
 
-      {/* Main Centered Content Column (Baseten Style) */}
+      {/* Main Centered Content Column */}
       <section
         style={{
           width: '100%',
@@ -103,7 +85,7 @@ export function LoginPage() {
             lineHeight: 1.2,
           }}
         >
-          Masuk ke Akun Anda
+          Masuk ke Dashboard
         </h1>
         <p
           style={{
@@ -113,7 +95,7 @@ export function LoginPage() {
             margin: 0,
           }}
         >
-          Masukkan kredensial administrator untuk mengelola captive portal, kampanye iklan sponsor, dan distribusi voucher.
+          Masuk menggunakan akun pengelola untuk mengatur router, materi iklan, dan akses pengguna.
         </p>
 
         <LoginForm />
@@ -133,8 +115,8 @@ export function LoginPage() {
           paddingTop: '1.25rem',
         }}
       >
-        <span>&copy; 2026 AdWave WiFi Platform</span>
-        <span>Privat &amp; Aman</span>
+        <span>&copy; 2026 AdWave WiFi</span>
+        <span>Panel Pengelola</span>
       </footer>
     </main>
   )
