@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"wifiads/internal/config"
 	"wifiads/internal/model"
@@ -81,8 +80,8 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	if err := renameLegacyIDRColumns(ctx, db); err != nil {
-		fmt.Fprintf(os.Stderr, "rename _id_r columns: %v\n", err)
+	if err := restoreGormIDRColumns(ctx, db); err != nil {
+		fmt.Fprintf(os.Stderr, "restore _id_r columns: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -127,30 +126,38 @@ var partnerMigrations = []string{
 	`UPDATE app.partners SET status = 'ACTIVE' WHERE status = '' OR status IS NULL`,
 }
 
-// renameLegacyIDRColumns fixes tables created by an older GORM version that split the
-// `IDR` suffix into `id_r`. It renames only when the old column exists and the new one
-// does not, so it is safe to run repeatedly.
-func renameLegacyIDRColumns(ctx context.Context, db *gorm.DB) error {
-	var rows []struct {
-		Table  string
-		Column string
+// restoreGormIDRColumns repairs IDR columns renamed by the earlier `_id_r` -> `_idr`
+// migration. GORM's default naming turns "WalletBalanceIDR" into "wallet_balance_id_r",
+// so any column whose name ends in `idr` or `idr_` is renamed to that form.
+func restoreGormIDRColumns(ctx context.Context, db *gorm.DB) error {
+	type idrCol struct {
+		TableName  string
+		ColumnName string
 	}
+	var rows []idrCol
 	err := db.WithContext(ctx).Raw(`
-		SELECT table_name AS table, column_name AS column
+		SELECT table_name AS table_name, column_name AS column_name
 		FROM information_schema.columns
-		WHERE table_schema = 'app' AND column_name LIKE '%\_id\_r'`).Scan(&rows).Error
+		WHERE table_schema = 'app'
+		  AND (right(column_name, 4) = 'idr_' OR right(column_name, 3) = 'idr')`).Scan(&rows).Error
 	if err != nil {
 		return err
 	}
+	logger, _ := os.Create("migrate_debug.log")
+	fmt.Fprintf(logger, "idr columns matched: %d\n", len(rows))
+	logger.Close()
 	for _, r := range rows {
-		newCol := strings.Replace(r.Column, "_id_r", "_idr", 1)
-		tbl := clause.Table{Name: "app." + r.Table}
-		if db.WithContext(ctx).Migrator().HasColumn(tbl, newCol) {
+		// wallet_balance_idr  -> wallet_balance_id_r
+		// wallet_balance_idr_ -> wallet_balance_id_r
+		base := strings.TrimSuffix(r.ColumnName, "_")
+		fixedCol := strings.TrimSuffix(base, "idr") + "id_r"
+		if fixedCol == r.ColumnName {
 			continue
 		}
-		if err := db.WithContext(ctx).Exec("ALTER TABLE ? RENAME COLUMN ? TO ?",
-			tbl, clause.Column{Name: r.Column}, clause.Column{Name: newCol}).Error; err != nil {
-			return fmt.Errorf("%s.%s: %w", r.Table, r.Column, err)
+		tbl := `"app"."` + r.TableName + `"`
+		stmt := fmt.Sprintf(`ALTER TABLE %s RENAME COLUMN "%s" TO "%s"`, tbl, r.ColumnName, fixedCol)
+		if err := db.WithContext(ctx).Exec(stmt).Error; err != nil {
+			return fmt.Errorf("%s.%s: %w", r.TableName, r.ColumnName, err)
 		}
 	}
 	return nil
