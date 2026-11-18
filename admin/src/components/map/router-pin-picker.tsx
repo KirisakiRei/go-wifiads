@@ -56,6 +56,8 @@ export function RouterPinPicker({
   const [mode, setMode] = useState<'gmaps' | 'search'>('gmaps')
   const [gmapsInput, setGmapsInput] = useState('')
   const [resolvingLink, setResolvingLink] = useState(false)
+  // True once the pasted link produced a pin: the button would only resend it.
+  const [linkResolved, setLinkResolved] = useState(false)
 
   const [searchQuery, setSearchQuery] = useState('')
   const [results, setResults] = useState<PlaceSearchResult[]>([])
@@ -147,6 +149,7 @@ export function RouterPinPicker({
         method: 'POST',
         ...jsonBody({ input }),
       })
+      setLinkResolved(true)
       const lat = Number(res.latitude.toFixed(6))
       const lng = Number(res.longitude.toFixed(6))
       onChange(lat, lng)
@@ -303,7 +306,10 @@ export function RouterPinPicker({
               <input
                 type="text"
                 value={gmapsInput}
-                onChange={(e) => setGmapsInput(e.target.value)}
+                onChange={(e) => {
+                  setGmapsInput(e.target.value)
+                  setLinkResolved(false)
+                }}
                 onPaste={(e) => {
                   const pasted = e.clipboardData.getData('text')
                   if (
@@ -311,6 +317,7 @@ export function RouterPinPicker({
                     (pasted.includes('goo.gl') || pasted.includes('google.com/maps') || pasted.includes('maps.google'))
                   ) {
                     setGmapsInput(pasted)
+                    setLinkResolved(false)
                     setTimeout(() => resolveGoogleMapsShare(pasted), 60)
                   }
                 }}
@@ -341,14 +348,19 @@ export function RouterPinPicker({
                 background: accentColor,
               }}
               onClick={() => resolveGoogleMapsShare()}
-              disabled={resolvingLink}
+              disabled={resolvingLink || linkResolved}
             >
-              {resolvingLink ? 'Mengambil Titik...' : 'Ambil Lokasi'}
+              {linkResolved
+                ? 'Lokasi Sudah Diambil'
+                : resolvingLink
+                  ? 'Mengambil Titik...'
+                  : 'Ambil Lokasi'}
             </button>
           </div>
-          <span style={{ fontSize: '11px', color: '#64748b' }}>
-            Buka tempat usaha di aplikasi Google Maps → ketuk <strong>Bagikan (Share)</strong> →{' '}
-            <strong>Salin Link</strong>, lalu tempel di kolom atas.
+            <span style={{ fontSize: '11px', color: '#64748b' }}>
+            Tempel link <strong>Bagikan (Share)</strong> dari Google Maps — titik lokasi langsung
+            diambil otomatis. Untuk lokasi lain: buka tempat usaha di Google Maps →{' '}
+            <strong>Bagikan</strong> → <strong>Salin Link</strong>, lalu tempel di kolom atas.
           </span>
         </div>
       ) : (
