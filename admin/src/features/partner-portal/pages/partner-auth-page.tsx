@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query'
-import { Lock, LogIn, Mail, Store } from 'lucide-react'
+import { Lock, LogIn, Store, User } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -9,11 +9,11 @@ import { partnerAuthQueryKey } from '@/features/partner-portal/hooks/use-current
 
 export function PartnerAuthPage() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
 
   const loginMutation = useMutation({
-    mutationFn: () => partnerApi.login({ email: email.trim(), password }),
+    mutationFn: () => partnerApi.login({ identifier: identifier.trim(), password }),
     onSuccess: (res) => {
       queryClient.setQueryData(partnerAuthQueryKey, res.partner)
       toast.success(`Selamat datang, ${res.partner.venue_name || res.partner.name}!`)
@@ -24,9 +24,9 @@ export function PartnerAuthPage() {
 
   return (
     <div
+      className="partner-theme"
       style={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -77,17 +77,16 @@ export function PartnerAuthPage() {
         >
           <div className="form-field">
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <Mail size={14} /> Email Mitra
+              <User size={14} /> Username atau Email
             </label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="mitra@kafeanda.id"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="contoh: kafekopi_nusantara"
+              autoComplete="username"
               required
             />
           </div>
-
           <div className="form-field">
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <Lock size={14} /> Kata Sandi
@@ -97,21 +96,15 @@ export function PartnerAuthPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Masukkan kata sandi"
+              autoComplete="current-password"
               required
             />
           </div>
-
           <button
             type="submit"
             className="btn btn-primary"
             disabled={loginMutation.isPending}
-            style={{
-              width: '100%',
-              padding: '0.8rem',
-              background: '#059669',
-              fontWeight: 700,
-              marginTop: '0.25rem',
-            }}
+            style={{ width: '100%', padding: '0.8rem', fontWeight: 700, marginTop: '0.25rem' }}
           >
             <LogIn size={17} />
             {loginMutation.isPending ? 'Memproses...' : 'Masuk ke Portal Mitra'}
@@ -128,7 +121,7 @@ export function PartnerAuthPage() {
             color: '#64748b',
           }}
         >
-          Akun mitra didaftarkan oleh tim pengelola saat pemasangan perangkat Wi-Fi di lokasi Anda.
+          Belum punya akun? Daftar melalui link undangan yang dikirim tim AdWave ke WhatsApp Anda.
         </div>
       </div>
     </div>

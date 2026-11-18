@@ -15,6 +15,7 @@ import type {
   MarketplaceRouterItem,
   PartnerAdItem,
   PartnerAuthResult,
+  PartnerInviteInfo,
   PartnerOverview,
   PartnerProfile,
   PartnerRouterItem,
@@ -204,46 +205,21 @@ export const adminMarketplaceApi = {
       ...jsonBody(data),
     }),
 
-  // Admin Partner & Withdrawals
+  // Admin Partner Invites, Settings & Withdrawals
   listPartners: (params: { page?: number; per_page?: number; search?: string } = {}) =>
     apiRequest<AdminPartnerItem[]>(`/api/v1/admin/partners${buildQuery(params)}`),
-  createPartner: (data: {
-    name: string
-    venue_name: string
-    venue_category: string
-    email: string
-    phone: string
-    password: string
-    address: string
-    latitude?: number | null
-    longitude?: number | null
-    revenue_share_percent?: number
-    bank_name: string
-    bank_account_number: string
-    bank_account_holder: string
-    is_active: boolean
-  }) =>
+  createPartnerInvite: (data: { venue_name: string; revenue_share_percent?: number }) =>
     apiClient<AdminPartnerItem>('/api/v1/admin/partners', {
       method: 'POST',
       ...jsonBody(data),
     }),
-  updatePartner: (
+  regeneratePartnerInvite: (id: string) =>
+    apiClient<AdminPartnerItem>(`/api/v1/admin/partners/${id}/regenerate-invite`, {
+      method: 'POST',
+    }),
+  updatePartnerSettings: (
     id: string,
-    data: {
-      name: string
-      venue_name: string
-      venue_category: string
-      email: string
-      phone: string
-      address: string
-      latitude?: number | null
-      longitude?: number | null
-      revenue_share_percent: number
-      bank_name: string
-      bank_account_number: string
-      bank_account_holder: string
-      is_active: boolean
-    }
+    data: { venue_name?: string; revenue_share_percent: number; is_active: boolean }
   ) =>
     apiClient<AdminPartnerItem>(`/api/v1/admin/partners/${id}`, {
       method: 'PUT',
@@ -367,7 +343,31 @@ export const advertiserApi = {
 // ==================== PARTNER PORTAL API ====================
 
 export const partnerApi = {
-  login: (data: { email: string; password: string }) =>
+  getInviteInfo: (token: string) =>
+    apiClient<PartnerInviteInfo>(`/api/v1/partner/invite/${encodeURIComponent(token)}`),
+  activateInvite: (
+    token: string,
+    data: {
+      username: string
+      email?: string
+      phone: string
+      name: string
+      password: string
+      venue_name: string
+      venue_category: string
+      address: string
+      latitude: number
+      longitude: number
+      bank_name?: string
+      bank_account_number?: string
+      bank_account_holder?: string
+    }
+  ) =>
+    apiClient<PartnerAuthResult>(`/api/v1/partner/invite/${encodeURIComponent(token)}/activate`, {
+      method: 'POST',
+      ...jsonBody(data),
+    }),
+  login: (data: { identifier: string; password: string }) =>
     apiClient<PartnerAuthResult>('/api/v1/partner/auth/login', {
       method: 'POST',
       ...jsonBody(data),
@@ -376,6 +376,7 @@ export const partnerApi = {
   me: () => apiClient<PartnerProfile>('/api/v1/partner/auth/me'),
   updateProfile: (data: {
     name: string
+    email?: string
     venue_name: string
     venue_category: string
     phone: string

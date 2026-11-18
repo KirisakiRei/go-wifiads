@@ -91,29 +91,38 @@ func (h *PartnerHandler) AdminGetPartner(c *gin.Context) {
 }
 
 func (h *PartnerHandler) AdminCreatePartner(c *gin.Context) {
-	var req dto.AdminCreatePartnerRequest
-	if !bindJSON(c, &req, "Data pendaftaran mitra tidak valid") {
+	var req dto.AdminCreatePartnerInviteRequest
+	if !bindJSON(c, &req, "Data undangan mitra tidak valid") {
 		return
 	}
-	res, err := h.svc.AdminCreatePartner(c.Request.Context(), req)
+	res, err := h.svc.AdminCreatePartnerInvite(c.Request.Context(), req)
 	if err != nil {
 		writeError(c, err)
 		return
 	}
-	httpx.Created(c, "Akun mitra berhasil didaftarkan", res)
+	httpx.Created(c, "Tautan undangan mitra berhasil dibuat", res)
+}
+
+func (h *PartnerHandler) AdminRegeneratePartnerInvite(c *gin.Context) {
+	res, err := h.svc.AdminRegeneratePartnerInvite(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Tautan undangan baru berhasil dibuat", res)
 }
 
 func (h *PartnerHandler) AdminUpdatePartner(c *gin.Context) {
-	var req dto.AdminUpdatePartnerRequest
-	if !bindJSON(c, &req, "Data perubahan mitra tidak valid") {
+	var req dto.AdminUpdatePartnerSettingsRequest
+	if !bindJSON(c, &req, "Pengaturan mitra tidak valid") {
 		return
 	}
-	res, err := h.svc.AdminUpdatePartner(c.Request.Context(), c.Param("id"), req)
+	res, err := h.svc.AdminUpdatePartnerSettings(c.Request.Context(), c.Param("id"), req)
 	if err != nil {
 		writeError(c, err)
 		return
 	}
-	httpx.OK(c, "Data mitra berhasil diperbarui", res)
+	httpx.OK(c, "Pengaturan bagi hasil & status mitra berhasil disimpan", res)
 }
 
 func (h *PartnerHandler) AdminChangePartnerPassword(c *gin.Context) {
@@ -170,7 +179,31 @@ func (h *PartnerHandler) AdminUploadPayoutProof(c *gin.Context) {
 	h.mktHandler.uploadAsset(c, "ads/admin/payouts", false)
 }
 
-// ==================== PARTNER PORTAL ENDPOINTS ====================
+// ==================== PARTNER INVITE & PORTAL ENDPOINTS ====================
+
+func (h *PartnerHandler) GetInviteInfo(c *gin.Context) {
+	res, err := h.svc.GetPartnerInviteInfo(c.Request.Context(), c.Param("token"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Informasi undangan mitra", res)
+}
+
+func (h *PartnerHandler) ActivateInvite(c *gin.Context) {
+	var req dto.PartnerActivateInviteRequest
+	if !bindJSON(c, &req, "Mohon lengkapi seluruh data akun dan lokasi tempat usaha") {
+		return
+	}
+	res, err := h.svc.ActivatePartnerInvite(c.Request.Context(), c.Param("token"), req)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(PartnerCookieName, res.Token, 60*60*24*7, "/", "", h.cookieSecure, true)
+	httpx.Created(c, "Selamat! Akun mitra berhasil diaktifkan", res)
+}
 
 func (h *PartnerHandler) Login(c *gin.Context) {
 	var req dto.PartnerLoginRequest

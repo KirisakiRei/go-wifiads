@@ -448,6 +448,9 @@ func (s *marketplaceService) ListMarketplaceRouters(ctx context.Context) ([]dto.
 
 		tierID, tierName, multiplier := ResolveEffectiveRouterTier(&r, tiers, avgConn, avgImp)
 		displayName, address, venueCat, lat, lng, _ := ResolveRouterPartnerDisplay(&r, partnerMap)
+		if lat == nil || lng == nil {
+			continue
+		}
 
 		priceImg := int64(math.Round(float64(setting.BasePriceImageIDR) * multiplier))
 		priceVid := int64(math.Round(float64(setting.BasePriceVideoIDR) * multiplier))

@@ -266,6 +266,7 @@ export interface AdminFinanceSummary {
 
 export interface AdminPartnerItem {
   id: string
+  username: string
   name: string
   venue_name: string
   venue_category: string
@@ -274,6 +275,7 @@ export interface AdminPartnerItem {
   address: string
   latitude?: number
   longitude?: number
+  has_coordinates: boolean
   revenue_share_percent: number
   wallet_balance_idr: number
   total_earned_idr: number
@@ -282,6 +284,10 @@ export interface AdminPartnerItem {
   bank_account_holder: string
   routers_count: number
   router_names: string[]
+  status: 'INVITED' | 'ACTIVE'
+  invite_token?: string
+  invite_expires_at?: string
+  activated_at?: string
   is_active: boolean
   last_login_at?: string
   created_at: string
@@ -307,8 +313,16 @@ export interface AdminWithdrawalItem {
 
 // ==================== PARTNER PORTAL TYPES (NO PERCENTAGE FIELDS) ====================
 
+export interface PartnerInviteInfo {
+  venue_name: string
+  venue_category: string
+  status: 'INVITED' | 'ACTIVE'
+  expires_at?: string
+}
+
 export interface PartnerProfile {
   id: string
+  username: string
   name: string
   venue_name: string
   venue_category: string
@@ -324,6 +338,7 @@ export interface PartnerProfile {
   bank_name: string
   bank_account_number: string
   bank_account_holder: string
+  status: 'INVITED' | 'ACTIVE'
   is_active: boolean
   last_login_at?: string
   created_at: string

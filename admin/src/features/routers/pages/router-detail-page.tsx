@@ -9,17 +9,16 @@ import {
   Globe,
   KeyRound,
   MapPin,
-  Navigation,
   RefreshCw,
   Save,
   ShieldCheck,
+  Store,
   Terminal,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { queryClient } from '@/app/query-client'
-import { RouterPinPicker } from '@/components/map/router-pin-picker'
 import { WavyHeader } from '@/components/ui'
 import { adminMarketplaceApi } from '@/features/marketplace/marketplace.api'
 import { routersApi } from '@/features/routers/routers.api'
@@ -65,16 +64,16 @@ export function RouterDetailPage() {
   const [nasPublicIp, setNasPublicIp] = useState<string>('')
   const [radiusSecret, setRadiusSecret] = useState<string>(() => generateRandomSecret(24))
 
-  // Map Location, Partner & Pricing Tier State
+  // Partner Assignment & Pricing Tier State
   const [partnerId, setPartnerId] = useState<string>('')
-  const [latitude, setLatitude] = useState<number | null>(-6.2088)
-  const [longitude, setLongitude] = useState<number | null>(106.8456)
-  const [coordPaste, setCoordPaste] = useState<string>('')
-  const [locationAddress, setLocationAddress] = useState<string>('')
-  const [venueCategory, setVenueCategory] = useState<string>('Kafe')
   const [locationTierId, setLocationTierId] = useState<string>('')
   const [locationTierAuto, setLocationTierAuto] = useState<boolean>(true)
   const [isPublicMarketplace, setIsPublicMarketplace] = useState<boolean>(true)
+
+  const selectedPartner = useMemo(
+    () => partnerOptions.find((p) => p.id === partnerId),
+    [partnerOptions, partnerId]
+  )
 
   const [setupMode, setSetupMode] = useState<'existing' | 'full'>('existing')
   const [radiusServerIp, setRadiusServerIp] = useState<string>('13.54.63.73')
@@ -103,10 +102,6 @@ export function RouterDetailPage() {
       setNasPublicIp(currentRouter.nas_ip_address || '')
       setRadiusSecret(currentRouter.radius_secret || generateRandomSecret(24))
       setPartnerId(currentRouter.partner_id || '')
-      setLatitude(typeof currentRouter.latitude === 'number' ? currentRouter.latitude : -6.2088)
-      setLongitude(typeof currentRouter.longitude === 'number' ? currentRouter.longitude : 106.8456)
-      setLocationAddress(currentRouter.location_address || '')
-      setVenueCategory(currentRouter.venue_category || 'Kafe')
       if (currentRouter.location_tier_id) {
         setLocationTierId(currentRouter.location_tier_id)
       }
@@ -146,10 +141,6 @@ export function RouterDetailPage() {
           nas_ip_address: nasPublicIp.trim(),
           radius_secret: radiusSecret.trim(),
           partner_id: partnerId || undefined,
-          latitude,
-          longitude,
-          location_address: locationAddress.trim(),
-          venue_category: venueCategory.trim(),
           location_tier_id: locationTierId || undefined,
           location_tier_auto: locationTierAuto,
           is_public_marketplace: isPublicMarketplace,
@@ -163,10 +154,6 @@ export function RouterDetailPage() {
         nas_ip_address: nasPublicIp.trim(),
         radius_secret: radiusSecret.trim(),
         partner_id: partnerId,
-        latitude,
-        longitude,
-        location_address: locationAddress.trim(),
-        venue_category: venueCategory.trim(),
         location_tier_id: locationTierId || undefined,
         location_tier_auto: locationTierAuto,
         is_public_marketplace: isPublicMarketplace,
@@ -740,7 +727,7 @@ ${fullNetworkSection}
                 </div>
               )}
 
-              {/* Lokasi Peta & Rank Tarif Iklan */}
+              {/* Penempatan Lokasi Mitra & Rank Tarif Iklan */}
               <div
                 style={{
                   paddingTop: '0.85rem',
@@ -750,64 +737,89 @@ ${fullNetworkSection}
                   gap: '0.85rem',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <MapPin size={15} color="#2563eb" />
-                    Titik Lokasi Peta &amp; Rank Tarif Iklan
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!navigator.geolocation) {
-                        toast.error('Browser tidak mendukung deteksi lokasi')
-                        return
-                      }
-                      navigator.geolocation.getCurrentPosition(
-                        (pos) => {
-                          setLatitude(Number(pos.coords.latitude.toFixed(6)))
-                          setLongitude(Number(pos.coords.longitude.toFixed(6)))
-                          toast.success('Titik koordinat diperbarui ke lokasi saat ini')
-                        },
-                        () => toast.error('Gagal mengambil lokasi GPS')
-                      )
-                    }}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.3rem',
-                      border: '1px solid #cbd5e1',
-                      background: '#f8fafc',
-                      color: '#334155',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      padding: '0.28rem 0.65rem',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Navigation size={12} />
-                    Gunakan Lokasi Saat Ini
-                  </button>
-                </div>
+                <label style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Store size={15} color="#2563eb" />
+                  Penempatan Lokasi Mitra &amp; Rank Tarif Iklan
+                </label>
 
                 {/* Partner Venue Selector */}
-                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '11px', padding: '0.85rem 1rem', display: 'grid', gap: '0.45rem' }}>
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '11px', padding: '0.9rem 1rem', display: 'grid', gap: '0.55rem' }}>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>
                     Mitra Pemilik Lokasi (Opsional)
                   </label>
                   <select
                     value={partnerId}
+                    onChange={(e) => setPartnerId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 0.75rem',
+                      borderRadius: '9px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '13px',
+                      background: '#ffffff',
+                    }}
+                  >
+                    <option value="">— Belum Dihubungkan ke Mitra —</option>
+                    {partnerOptions.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.venue_name}
+                        {p.status === 'INVITED'
+                          ? ' (Menunggu Aktivasi Mitra)'
+                          : p.name
+                            ? ` — ${p.name}`
+                            : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedPartner ? (
+                    <div
+                      style={{
+                        marginTop: '0.2rem',
+                        padding: '0.7rem 0.85rem',
+                        borderRadius: '9px',
+                        background: selectedPartner.has_coordinates ? '#ecfdf5' : '#fffbeb',
+                        border: `1px solid ${selectedPartner.has_coordinates ? '#a7f3d0' : '#fde68a'}`,
+                        color: selectedPartner.has_coordinates ? '#065f46' : '#92400e',
+                        fontSize: '12px',
+                        display: 'grid',
+                        gap: '2px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 700 }}>
+                        <MapPin size={13} />
+                        <span>
+                          {selectedPartner.venue_name} ({selectedPartner.venue_category || 'Kafe'}) —{' '}
+                          {selectedPartner.has_coordinates
+                            ? 'Titik Lokasi Aktif ✓'
+                            : 'Menunggu Mitra Mengatur Lokasi'}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '11px' }}>
+                        {selectedPartner.has_coordinates
+                          ? selectedPartner.address
+                          : 'Router sudah tersambung ke mitra ini. Titik peta di halaman Pengiklan akan otomatis tampil begitu mitra melengkapi lokasi usaha mereka.'}
+                      </span>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                      Titik peta, alamat, dan nama tempat dikelola langsung oleh Mitra melalui akun mereka. Anda tetap dapat menyiapkan router &amp; script MikroTik sekarang lalu menghubungkannya ke Mitra kapan saja.
+                    </span>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>
+                    Penentuan Rank Lokasi (Multiplier Tarif)
+                  </label>
+                  <select
+                    value={locationTierAuto ? 'auto' : locationTierId}
                     onChange={(e) => {
-                      const val = e.target.value
-                      setPartnerId(val)
-                      const found = partnerOptions.find((p) => p.id === val)
-                      if (found) {
-                        if (typeof found.latitude === 'number' && typeof found.longitude === 'number') {
-                          setLatitude(found.latitude)
-                          setLongitude(found.longitude)
-                        }
-                        if (found.address) setLocationAddress(found.address)
-                        if (found.venue_category) setVenueCategory(found.venue_category)
+                      if (e.target.value === 'auto') {
+                        setLocationTierAuto(true)
+                      } else {
+                        setLocationTierAuto(false)
+                        setLocationTierId(e.target.value)
                       }
                     }}
                     style={{
@@ -819,171 +831,13 @@ ${fullNetworkSection}
                       background: '#ffffff',
                     }}
                   >
-                    <option value="">— Tidak Terhubung ke Mitra (Lokasi Mandiri) —</option>
-                    {partnerOptions.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.venue_name} — {p.name} ({p.email})
+                    <option value="auto">Otomatis Berdasarkan Trafik Harian</option>
+                    {locationTiers.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        Kunci Manual: {t.name} ({t.multiplier}x)
                       </option>
                     ))}
                   </select>
-                  <span style={{ fontSize: '11px', color: '#64748b' }}>
-                    Jika dihubungkan ke Mitra, label di peta Pengiklan otomatis menampilkan nama lokasi mitra tersebut dan membagi hasil iklan sesuai porsi mitra.
-                  </span>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>
-                      Kategori Tempat
-                    </label>
-                    <select
-                      value={venueCategory}
-                      onChange={(e) => setVenueCategory(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '0.55rem 0.75rem',
-                        borderRadius: '9px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '13px',
-                        background: '#ffffff',
-                      }}
-                    >
-                      <option value="Kafe">Kafe &amp; Kedai Kopi</option>
-                      <option value="Restoran">Restoran &amp; Kuliner</option>
-                      <option value="Coworking">Coworking &amp; Kantor</option>
-                      <option value="Kampus">Kampus &amp; Sekolah</option>
-                      <option value="Area Publik">Area Publik &amp; Komersial</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>
-                      Penentuan Rank Lokasi
-                    </label>
-                    <select
-                      value={locationTierAuto ? 'auto' : locationTierId}
-                      onChange={(e) => {
-                        if (e.target.value === 'auto') {
-                          setLocationTierAuto(true)
-                        } else {
-                          setLocationTierAuto(false)
-                          setLocationTierId(e.target.value)
-                        }
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '0.55rem 0.75rem',
-                        borderRadius: '9px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '13px',
-                        background: '#ffffff',
-                      }}
-                    >
-                      <option value="auto">Otomatis Berdasarkan Trafik Harian</option>
-                      {locationTiers.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          Kunci Manual: {t.name} ({t.multiplier}x)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>
-                    Alamat Lengkap Lokasi
-                  </label>
-                  <input
-                    type="text"
-                    value={locationAddress}
-                    onChange={(e) => setLocationAddress(e.target.value)}
-                    placeholder="Contoh: Jl. Sudirman No. 12, Jakarta Selatan"
-                    style={{
-                      width: '100%',
-                      padding: '0.55rem 0.75rem',
-                      borderRadius: '9px',
-                      border: '1px solid #cbd5e1',
-                      fontSize: '13px',
-                    }}
-                  />
-                </div>
-
-                <RouterPinPicker
-                  latitude={latitude}
-                  longitude={longitude}
-                  onChange={(lat, lng) => {
-                    setLatitude(lat)
-                    setLongitude(lng)
-                  }}
-                  height={230}
-                />
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '0.25rem' }}>
-                      Latitude
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={latitude ?? ''}
-                      onChange={(e) => setLatitude(e.target.value === '' ? null : Number(e.target.value))}
-                      placeholder="-6.2088"
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem 0.7rem',
-                        borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '12px',
-                        fontFamily: 'monospace',
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '0.25rem' }}>
-                      Longitude
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={longitude ?? ''}
-                      onChange={(e) => setLongitude(e.target.value === '' ? null : Number(e.target.value))}
-                      placeholder="106.8456"
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem 0.7rem',
-                        borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '12px',
-                        fontFamily: 'monospace',
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <input
-                    type="text"
-                    value={coordPaste}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setCoordPaste(val)
-                      const parts = val.split(',').map((s) => Number(s.trim()))
-                      if (parts.length === 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
-                        setLatitude(Number(parts[0].toFixed(6)))
-                        setLongitude(Number(parts[1].toFixed(6)))
-                      }
-                    }}
-                    placeholder="Atau tempel koordinat dari Google Maps (contoh: -6.2088, 106.8456)"
-                    style={{
-                      width: '100%',
-                      padding: '0.5rem 0.75rem',
-                      borderRadius: '8px',
-                      border: '1px dashed #cbd5e1',
-                      fontSize: '12px',
-                      background: '#f8fafc',
-                    }}
-                  />
                 </div>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '12px', cursor: 'pointer', color: '#0f172a' }}>
@@ -992,7 +846,7 @@ ${fullNetworkSection}
                     checked={isPublicMarketplace}
                     onChange={(e) => setIsPublicMarketplace(e.target.checked)}
                   />
-                  <span><strong>Tampilkan router ini di peta pemilihan lokasi pengiklan</strong></span>
+                  <span><strong>Tampilkan lokasi ini di peta pemilihan iklan (ketika titik lokasi mitra sudah aktif)</strong></span>
                 </label>
               </div>
 

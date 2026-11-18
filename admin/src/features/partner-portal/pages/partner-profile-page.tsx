@@ -192,8 +192,8 @@ export function PartnerProfilePage() {
                   <MapPin size={16} color="#ea4335" /> Titik Koordinat Peta &amp; Alamat Lengkap (Wajib) *
                 </strong>
                 <span style={{ fontSize: '11px', color: '#64748b' }}>
-                  Cari nama jalan atau klik tombol Lokasi Saya, lalu klik/geser pin merah tepat pada
-                  posisi tempat usaha Anda.
+                  Paste link Google Maps (tombol Bagikan) atau cari nama jalan, lalu geser pin
+                  merah tepat pada posisi tempat usaha Anda.
                 </span>
               </div>
 
@@ -211,35 +211,6 @@ export function PartnerProfilePage() {
                 }}
                 height={280}
               />
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div className="form-field">
-                  <label>Latitude *</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={latitude ?? ''}
-                    onChange={(e) =>
-                      setLatitude(e.target.value === '' ? null : Number(e.target.value))
-                    }
-                    placeholder="Klik pada peta di atas"
-                    required
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Longitude *</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={longitude ?? ''}
-                    onChange={(e) =>
-                      setLongitude(e.target.value === '' ? null : Number(e.target.value))
-                    }
-                    placeholder="Klik pada peta di atas"
-                    required
-                  />
-                </div>
-              </div>
 
               <div className="form-field">
                 <label>Alamat Lengkap Lokasi *</label>
@@ -341,8 +312,12 @@ export function PartnerProfilePage() {
             </h3>
 
             <div className="form-field">
-              <label>Email Akun Mitra</label>
-              <input value={partner.email} disabled style={{ background: '#f8fafc' }} />
+              <label>Username / Email Akun Mitra</label>
+              <input
+                value={partner.username || partner.email || '-'}
+                disabled
+                style={{ background: '#f8fafc' }}
+              />
             </div>
 
             <div className="form-field">

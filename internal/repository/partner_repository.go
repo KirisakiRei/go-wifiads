@@ -63,12 +63,15 @@ type PartnerAdVenueStat struct {
 }
 
 type PartnerRepository interface {
-	// Partner CRUD
+	// Partner CRUD & Invites
 	CreatePartner(ctx context.Context, p *model.Partner) error
 	UpdatePartner(ctx context.Context, p *model.Partner) error
 	DeletePartner(ctx context.Context, id string) error
 	FindPartnerByID(ctx context.Context, id string) (*model.Partner, error)
+	FindPartnerByUsername(ctx context.Context, username string) (*model.Partner, error)
 	FindPartnerByEmail(ctx context.Context, email string) (*model.Partner, error)
+	FindPartnerByIdentifier(ctx context.Context, identifier string) (*model.Partner, error)
+	FindPartnerByInviteToken(ctx context.Context, token string) (*model.Partner, error)
 	FindPartnersByIDs(ctx context.Context, ids []string) (map[string]model.Partner, error)
 	ListAllPartners(ctx context.Context) ([]model.Partner, error)
 	ListPartners(ctx context.Context, page, perPage int, search string) ([]model.Partner, int64, error)
@@ -107,7 +110,7 @@ func NewPartnerRepository(db *gorm.DB) PartnerRepository {
 func (r *partnerRepository) CreatePartner(ctx context.Context, p *model.Partner) error {
 	if err := r.db.WithContext(ctx).Create(p).Error; err != nil {
 		if isUniqueViolation(err) {
-			return apperror.New(apperror.ErrAlreadyExists, "Alamat email mitra sudah terdaftar")
+			return apperror.New(apperror.ErrAlreadyExists, "Username atau email mitra sudah terdaftar")
 		}
 		return err
 	}
@@ -117,7 +120,7 @@ func (r *partnerRepository) CreatePartner(ctx context.Context, p *model.Partner)
 func (r *partnerRepository) UpdatePartner(ctx context.Context, p *model.Partner) error {
 	if err := r.db.WithContext(ctx).Save(p).Error; err != nil {
 		if isUniqueViolation(err) {
-			return apperror.New(apperror.ErrAlreadyExists, "Alamat email sudah digunakan mitra lain")
+			return apperror.New(apperror.ErrAlreadyExists, "Username atau email sudah digunakan mitra lain")
 		}
 		return err
 	}
@@ -148,9 +151,51 @@ func (r *partnerRepository) FindPartnerByID(ctx context.Context, id string) (*mo
 	return &p, nil
 }
 
+func (r *partnerRepository) FindPartnerByUsername(ctx context.Context, username string) (*model.Partner, error) {
+	var p model.Partner
+	clean := strings.TrimSpace(username)
+	if clean == "" {
+		return nil, apperror.ErrNotFound
+	}
+	if err := r.db.WithContext(ctx).Where("LOWER(username) = LOWER(?)", clean).First(&p).Error; err != nil {
+		return nil, translateNotFound(err)
+	}
+	return &p, nil
+}
+
 func (r *partnerRepository) FindPartnerByEmail(ctx context.Context, email string) (*model.Partner, error) {
 	var p model.Partner
-	if err := r.db.WithContext(ctx).Where("LOWER(email) = LOWER(?)", strings.TrimSpace(email)).First(&p).Error; err != nil {
+	clean := strings.TrimSpace(email)
+	if clean == "" {
+		return nil, apperror.ErrNotFound
+	}
+	if err := r.db.WithContext(ctx).Where("LOWER(email) = LOWER(?)", clean).First(&p).Error; err != nil {
+		return nil, translateNotFound(err)
+	}
+	return &p, nil
+}
+
+func (r *partnerRepository) FindPartnerByIdentifier(ctx context.Context, identifier string) (*model.Partner, error) {
+	var p model.Partner
+	clean := strings.TrimSpace(identifier)
+	if clean == "" {
+		return nil, apperror.ErrNotFound
+	}
+	if err := r.db.WithContext(ctx).
+		Where("LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)", clean, clean).
+		First(&p).Error; err != nil {
+		return nil, translateNotFound(err)
+	}
+	return &p, nil
+}
+
+func (r *partnerRepository) FindPartnerByInviteToken(ctx context.Context, token string) (*model.Partner, error) {
+	var p model.Partner
+	clean := strings.TrimSpace(token)
+	if clean == "" {
+		return nil, apperror.ErrNotFound
+	}
+	if err := r.db.WithContext(ctx).Where("invite_token = ?", clean).First(&p).Error; err != nil {
 		return nil, translateNotFound(err)
 	}
 	return &p, nil
@@ -184,7 +229,10 @@ func (r *partnerRepository) ListPartners(ctx context.Context, page, perPage int,
 	q := r.db.WithContext(ctx).Model(&model.Partner{})
 	if s := strings.TrimSpace(search); s != "" {
 		like := "%" + s + "%"
-		q = q.Where("name ILIKE ? OR venue_name ILIKE ? OR email ILIKE ? OR phone ILIKE ? OR address ILIKE ?", like, like, like, like, like)
+		q = q.Where(
+			"COALESCE(username, '') ILIKE ? OR COALESCE(name, '') ILIKE ? OR venue_name ILIKE ? OR COALESCE(email, '') ILIKE ? OR COALESCE(phone, '') ILIKE ? OR COALESCE(address, '') ILIKE ?",
+			like, like, like, like, like, like,
+		)
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {

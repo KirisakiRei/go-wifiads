@@ -17,6 +17,7 @@ ssh/
 
 # Build output
 /bin/
+/build/
 *.exe
 
 # React admin build and dependencies

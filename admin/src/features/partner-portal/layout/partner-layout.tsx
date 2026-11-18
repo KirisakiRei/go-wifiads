@@ -48,7 +48,7 @@ export function PartnerLayout() {
   }
 
   return (
-    <div className="stitch-shell">
+    <div className="stitch-shell partner-theme">
       <aside className={`stitch-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
         <div>
           <div className="sidebar-header">
@@ -153,7 +153,7 @@ export function PartnerLayout() {
           </div>
         </header>
 
-        <main style={{ minHeight: 'calc(100vh - 64px)', background: '#f8f9ff' }}>
+        <main className="partner-canvas" style={{ minHeight: 'calc(100vh - 64px)' }}>
           <Outlet />
         </main>
       </div>

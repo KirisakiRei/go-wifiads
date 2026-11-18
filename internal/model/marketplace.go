@@ -30,6 +30,9 @@ const (
 	PartnerTxWithdrawal       = "WITHDRAWAL"
 	PartnerTxWithdrawalRefund = "WITHDRAWAL_REFUND"
 	PartnerTxAdminAdjustment  = "ADMIN_ADJUSTMENT"
+
+	PartnerStatusInvited = "INVITED"
+	PartnerStatusActive  = "ACTIVE"
 )
 
 // LocationTier defines the pricing rank multiplier for a router location (e.g. 1.0x, 1.2x, 1.5x)
@@ -103,10 +106,11 @@ func (Advertiser) TableName() string {
 // and earning a revenue share from paid advertisements shown at their venue.
 type Partner struct {
 	Base
-	Email               string     `gorm:"type:varchar(191);uniqueIndex;not null" json:"email"`
+	Username            *string    `gorm:"type:varchar(80);uniqueIndex" json:"username,omitempty"`
+	Email               *string    `gorm:"type:varchar(191);uniqueIndex" json:"email,omitempty"`
 	Phone               string     `gorm:"type:varchar(32)" json:"phone"`
-	PasswordHash        string     `gorm:"type:varchar(255);not null" json:"-"`
-	Name                string     `gorm:"type:varchar(120);not null" json:"name"`
+	PasswordHash        string     `gorm:"type:varchar(255)" json:"-"`
+	Name                string     `gorm:"type:varchar(120)" json:"name"`
 	VenueName           string     `gorm:"type:varchar(150);not null" json:"venue_name"`
 	VenueCategory       string     `gorm:"type:varchar(64);default:'Kafe'" json:"venue_category"`
 	Address             string     `gorm:"type:varchar(255)" json:"address"`
@@ -118,6 +122,10 @@ type Partner struct {
 	BankName            string     `gorm:"type:varchar(80)" json:"bank_name"`
 	BankAccountNumber   string     `gorm:"type:varchar(80)" json:"bank_account_number"`
 	BankAccountHolder   string     `gorm:"type:varchar(120)" json:"bank_account_holder"`
+	Status              string     `gorm:"type:varchar(24);not null;default:'ACTIVE';index" json:"status"`
+	InviteToken         *string    `gorm:"type:varchar(96);uniqueIndex" json:"-"`
+	InviteExpiresAt     *time.Time `json:"invite_expires_at,omitempty"`
+	ActivatedAt         *time.Time `json:"activated_at,omitempty"`
 	IsActive            bool       `gorm:"not null;default:true" json:"is_active"`
 	LastLoginAt         *time.Time `json:"last_login_at,omitempty"`
 }

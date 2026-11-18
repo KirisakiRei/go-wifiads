@@ -138,6 +138,7 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 	api.Use(middleware.RateLimit(120, 0))
 	{
 		api.GET("/map-geocode", mapTileHandler.SearchPlace)
+		api.POST("/map-resolve-link", mapTileHandler.ResolveGoogleMapsLink)
 		api.POST("/portal-sessions", portalHandler.CreateSession)
 		api.GET("/portal-sessions/:token", portalHandler.SessionStatus)
 		api.POST("/portal-sessions/:token/survey", portalHandler.SubmitSurvey)
@@ -219,6 +220,7 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 		protected.POST("/partners", partnerHandler.AdminCreatePartner)
 		protected.GET("/partners/:id", partnerHandler.AdminGetPartner)
 		protected.PUT("/partners/:id", partnerHandler.AdminUpdatePartner)
+		protected.POST("/partners/:id/regenerate-invite", partnerHandler.AdminRegeneratePartnerInvite)
 		protected.PUT("/partners/:id/password", partnerHandler.AdminChangePartnerPassword)
 		protected.DELETE("/partners/:id", partnerHandler.AdminDeletePartner)
 		protected.GET("/partners/withdrawals", partnerHandler.AdminListWithdrawals)
@@ -264,6 +266,8 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 	// Partner Venue Owner API (/api/v1/partner)
 	partnerPublic := api.Group("/partner")
 	{
+		partnerPublic.GET("/invite/:token", middleware.RateLimit(30, 0), partnerHandler.GetInviteInfo)
+		partnerPublic.POST("/invite/:token/activate", middleware.RateLimit(15, 0), partnerHandler.ActivateInvite)
 		partnerPublic.POST("/auth/login", middleware.RateLimit(10, 0), partnerHandler.Login)
 		partnerPublic.POST("/auth/logout", partnerHandler.Logout)
 	}

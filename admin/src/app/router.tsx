@@ -32,6 +32,7 @@ import { PartnerLayout } from '@/features/partner-portal/layout/partner-layout'
 import { PartnerAdsPage } from '@/features/partner-portal/pages/partner-ads-page'
 import { PartnerAuthPage } from '@/features/partner-portal/pages/partner-auth-page'
 import { PartnerEarningsPage } from '@/features/partner-portal/pages/partner-earnings-page'
+import { PartnerInvitePage } from '@/features/partner-portal/pages/partner-invite-page'
 import { PartnerOverviewPage } from '@/features/partner-portal/pages/partner-overview-page'
 import { PartnerProfilePage } from '@/features/partner-portal/pages/partner-profile-page'
 import { PartnerRoutersPage } from '@/features/partner-portal/pages/partner-routers-page'
@@ -154,6 +155,7 @@ export function createPartnerRouter() {
           </PartnerPublicOnlyRoute>
         ),
       },
+      { path: '/invite/:token', element: <PartnerInvitePage /> },
       {
         element: (
           <PartnerProtectedRoute>

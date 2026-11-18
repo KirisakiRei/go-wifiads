@@ -55,10 +55,11 @@ type AdminFinanceSummaryResponse struct {
 	ByRouter                []AdminRouterRevenueItem `json:"by_router"`
 }
 
-// ==================== ADMIN PARTNER MANAGEMENT ====================
+// ==================== ADMIN PARTNER INVITE & SETTINGS ====================
 
 type AdminPartnerResponse struct {
 	ID                  string     `json:"id"`
+	Username            string     `json:"username"`
 	Name                string     `json:"name"`
 	VenueName           string     `json:"venue_name"`
 	VenueCategory       string     `json:"venue_category"`
@@ -67,6 +68,7 @@ type AdminPartnerResponse struct {
 	Address             string     `json:"address"`
 	Latitude            *float64   `json:"latitude,omitempty"`
 	Longitude           *float64   `json:"longitude,omitempty"`
+	HasCoordinates      bool       `json:"has_coordinates"`
 	RevenueSharePercent float64    `json:"revenue_share_percent"`
 	WalletBalanceIDR    int64      `json:"wallet_balance_idr"`
 	TotalEarnedIDR      int64      `json:"total_earned_idr"`
@@ -75,42 +77,28 @@ type AdminPartnerResponse struct {
 	BankAccountHolder   string     `json:"bank_account_holder"`
 	RoutersCount        int        `json:"routers_count"`
 	RouterNames         []string   `json:"router_names"`
+	Status              string     `json:"status"`
+	InviteToken         string     `json:"invite_token,omitempty"`
+	InviteExpiresAt     *time.Time `json:"invite_expires_at,omitempty"`
+	ActivatedAt         *time.Time `json:"activated_at,omitempty"`
 	IsActive            bool       `json:"is_active"`
 	LastLoginAt         *time.Time `json:"last_login_at,omitempty"`
 	CreatedAt           time.Time  `json:"created_at"`
 }
 
-type AdminCreatePartnerRequest struct {
-	Name                string   `json:"name" binding:"required,min=2,max=120"`
+// AdminCreatePartnerInviteRequest creates a lightweight Partner slot + unique invite token
+// without requiring Admin to collect personal credentials, coordinates, or bank info.
+type AdminCreatePartnerInviteRequest struct {
 	VenueName           string   `json:"venue_name" binding:"required,min=2,max=150"`
-	VenueCategory       string   `json:"venue_category" binding:"max=64"`
-	Email               string   `json:"email" binding:"required,email,max=191"`
-	Phone               string   `json:"phone" binding:"max=32"`
-	Password            string   `json:"password" binding:"required,min=6,max=72"`
-	Address             string   `json:"address" binding:"max=255"`
-	Latitude            *float64 `json:"latitude"`
-	Longitude           *float64 `json:"longitude"`
-	RevenueSharePercent *float64 `json:"revenue_share_percent"`
-	BankName            string   `json:"bank_name" binding:"max=80"`
-	BankAccountNumber   string   `json:"bank_account_number" binding:"max=80"`
-	BankAccountHolder   string   `json:"bank_account_holder" binding:"max=120"`
-	IsActive            *bool    `json:"is_active"`
+	RevenueSharePercent *float64 `json:"revenue_share_percent" binding:"omitempty,min=0,max=95"`
 }
 
-type AdminUpdatePartnerRequest struct {
-	Name                string   `json:"name" binding:"required,min=2,max=120"`
-	VenueName           string   `json:"venue_name" binding:"required,min=2,max=150"`
-	VenueCategory       string   `json:"venue_category" binding:"max=64"`
-	Email               string   `json:"email" binding:"required,email,max=191"`
-	Phone               string   `json:"phone" binding:"max=32"`
-	Address             string   `json:"address" binding:"max=255"`
-	Latitude            *float64 `json:"latitude"`
-	Longitude           *float64 `json:"longitude"`
-	RevenueSharePercent float64  `json:"revenue_share_percent" binding:"min=0,max=95"`
-	BankName            string   `json:"bank_name" binding:"max=80"`
-	BankAccountNumber   string   `json:"bank_account_number" binding:"max=80"`
-	BankAccountHolder   string   `json:"bank_account_holder" binding:"max=120"`
-	IsActive            bool     `json:"is_active"`
+// AdminUpdatePartnerSettingsRequest updates only Admin-owned fields (revenue share % & active toggle).
+// Profile, map coordinates, address, and bank details belong exclusively to the Partner.
+type AdminUpdatePartnerSettingsRequest struct {
+	VenueName           string  `json:"venue_name" binding:"omitempty,max=150"`
+	RevenueSharePercent float64 `json:"revenue_share_percent" binding:"min=0,max=95"`
+	IsActive            bool    `json:"is_active"`
 }
 
 type AdminChangePartnerPasswordRequest struct {
@@ -151,15 +139,40 @@ type AdminProcessWithdrawalRequest struct {
 	AdminNote     string `json:"admin_note" binding:"max=1000"`
 }
 
-// ==================== PARTNER PORTAL (STRICT PRIVACY: NO SHARE % OR GROSS COST) ====================
+// ==================== PARTNER INVITE & PORTAL (STRICT PRIVACY: NO SHARE % OR GROSS COST) ====================
+
+type PartnerInviteInfoResponse struct {
+	VenueName     string     `json:"venue_name"`
+	VenueCategory string     `json:"venue_category"`
+	Status        string     `json:"status"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+}
+
+type PartnerActivateInviteRequest struct {
+	Username          string   `json:"username" binding:"required,min=3,max=64"`
+	Email             string   `json:"email" binding:"omitempty,email,max=191"`
+	Phone             string   `json:"phone" binding:"max=32"`
+	Name              string   `json:"name" binding:"required,min=2,max=120"`
+	Password          string   `json:"password" binding:"required,min=6,max=72"`
+	VenueName         string   `json:"venue_name" binding:"required,min=2,max=150"`
+	VenueCategory     string   `json:"venue_category" binding:"required,min=2,max=64"`
+	Address           string   `json:"address" binding:"required,min=5,max=255"`
+	Latitude          *float64 `json:"latitude" binding:"required"`
+	Longitude         *float64 `json:"longitude" binding:"required"`
+	BankName          string   `json:"bank_name" binding:"max=80"`
+	BankAccountNumber string   `json:"bank_account_number" binding:"max=80"`
+	BankAccountHolder string   `json:"bank_account_holder" binding:"max=120"`
+}
 
 type PartnerLoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+	Identifier string `json:"identifier"`
+	Email      string `json:"email"`
+	Password   string `json:"password" binding:"required"`
 }
 
 type PartnerProfileResponse struct {
 	ID                     string     `json:"id"`
+	Username               string     `json:"username"`
 	Name                   string     `json:"name"`
 	VenueName              string     `json:"venue_name"`
 	VenueCategory          string     `json:"venue_category"`
@@ -175,6 +188,7 @@ type PartnerProfileResponse struct {
 	BankName               string     `json:"bank_name"`
 	BankAccountNumber      string     `json:"bank_account_number"`
 	BankAccountHolder      string     `json:"bank_account_holder"`
+	Status                 string     `json:"status"`
 	IsActive               bool       `json:"is_active"`
 	LastLoginAt            *time.Time `json:"last_login_at,omitempty"`
 	CreatedAt              time.Time  `json:"created_at"`
@@ -188,6 +202,7 @@ type PartnerAuthResponse struct {
 
 type UpdatePartnerProfileRequest struct {
 	Name              string   `json:"name" binding:"required,min=2,max=120"`
+	Email             string   `json:"email" binding:"omitempty,email,max=191"`
 	VenueName         string   `json:"venue_name" binding:"required,min=2,max=150"`
 	VenueCategory     string   `json:"venue_category" binding:"required,min=2,max=64"`
 	Phone             string   `json:"phone" binding:"max=32"`
@@ -220,19 +235,19 @@ type PartnerRankProgress struct {
 }
 
 type PartnerOverviewResponse struct {
-	WalletBalanceIDR   int64                `json:"wallet_balance_idr"`
-	TotalEarnedIDR     int64                `json:"total_earned_idr"`
-	TodayEarnedIDR     int64                `json:"today_earned_idr"`
-	MonthEarnedIDR     int64                `json:"month_earned_idr"`
-	TodayVisitors      int64                `json:"today_visitors"`
-	ActiveAdsCount     int64                `json:"active_ads_count"`
-	RoutersCount       int                  `json:"routers_count"`
-	OnlineRoutersCount int                  `json:"online_routers_count"`
-	NeedsLocationSetup bool                 `json:"needs_location_setup"`
-	Rank               PartnerRankProgress  `json:"rank"`
-	TrendToday         []PartnerChartPoint  `json:"trend_today"`
-	Trend7d            []PartnerChartPoint  `json:"trend_7d"`
-	Trend30d           []PartnerChartPoint  `json:"trend_30d"`
+	WalletBalanceIDR   int64               `json:"wallet_balance_idr"`
+	TotalEarnedIDR     int64               `json:"total_earned_idr"`
+	TodayEarnedIDR     int64               `json:"today_earned_idr"`
+	MonthEarnedIDR     int64               `json:"month_earned_idr"`
+	TodayVisitors      int64               `json:"today_visitors"`
+	ActiveAdsCount     int64               `json:"active_ads_count"`
+	RoutersCount       int                 `json:"routers_count"`
+	OnlineRoutersCount int                 `json:"online_routers_count"`
+	NeedsLocationSetup bool                `json:"needs_location_setup"`
+	Rank               PartnerRankProgress `json:"rank"`
+	TrendToday         []PartnerChartPoint `json:"trend_today"`
+	Trend7d            []PartnerChartPoint `json:"trend_7d"`
+	Trend30d           []PartnerChartPoint `json:"trend_30d"`
 }
 
 type PartnerAdItem struct {

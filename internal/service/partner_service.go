@@ -141,17 +141,20 @@ type PartnerService interface {
 	AdminGetFinanceSummary(ctx context.Context, query dto.AdminFinanceQuery) (*dto.AdminFinanceSummaryResponse, error)
 	AdminListGlobalWalletTransactions(ctx context.Context, query dto.WalletTransactionListQuery) ([]dto.WalletTransactionResponse, dto.PaginationMeta, error)
 
-	// Admin Partner CRUD & Withdrawals
+	// Admin Partner Invite, Settings & Withdrawals
 	AdminListPartners(ctx context.Context, query dto.AdminPartnerListQuery) ([]dto.AdminPartnerResponse, dto.PaginationMeta, error)
 	AdminGetPartner(ctx context.Context, id string) (*dto.AdminPartnerResponse, error)
-	AdminCreatePartner(ctx context.Context, req dto.AdminCreatePartnerRequest) (*dto.AdminPartnerResponse, error)
-	AdminUpdatePartner(ctx context.Context, id string, req dto.AdminUpdatePartnerRequest) (*dto.AdminPartnerResponse, error)
+	AdminCreatePartnerInvite(ctx context.Context, req dto.AdminCreatePartnerInviteRequest) (*dto.AdminPartnerResponse, error)
+	AdminRegeneratePartnerInvite(ctx context.Context, id string) (*dto.AdminPartnerResponse, error)
+	AdminUpdatePartnerSettings(ctx context.Context, id string, req dto.AdminUpdatePartnerSettingsRequest) (*dto.AdminPartnerResponse, error)
 	AdminChangePartnerPassword(ctx context.Context, id string, req dto.AdminChangePartnerPasswordRequest) error
 	AdminDeletePartner(ctx context.Context, id string) error
 	AdminListWithdrawals(ctx context.Context, query dto.WithdrawalListQuery) ([]dto.AdminWithdrawalResponse, dto.PaginationMeta, error)
 	AdminProcessWithdrawal(ctx context.Context, adminID, withdrawalID string, req dto.AdminProcessWithdrawalRequest) (*dto.AdminWithdrawalResponse, error)
 
-	// Partner Portal Auth & Self-Service (Revenue % strictly hidden)
+	// Partner Invite Onboarding & Portal Self-Service (Revenue % strictly hidden)
+	GetPartnerInviteInfo(ctx context.Context, token string) (*dto.PartnerInviteInfoResponse, error)
+	ActivatePartnerInvite(ctx context.Context, token string, req dto.PartnerActivateInviteRequest) (*dto.PartnerAuthResponse, error)
 	LoginPartner(ctx context.Context, req dto.PartnerLoginRequest) (*dto.PartnerAuthResponse, error)
 	GetPartnerProfile(ctx context.Context, partnerID string) (*dto.PartnerProfileResponse, error)
 	UpdatePartnerProfile(ctx context.Context, partnerID string, req dto.UpdatePartnerProfileRequest) (*dto.PartnerProfileResponse, error)
@@ -510,16 +513,7 @@ func (s *partnerService) AdminGetPartner(ctx context.Context, id string) (*dto.A
 	return &res, nil
 }
 
-func (s *partnerService) AdminCreatePartner(ctx context.Context, req dto.AdminCreatePartnerRequest) (*dto.AdminPartnerResponse, error) {
-	email := strings.ToLower(strings.TrimSpace(req.Email))
-	existing, err := s.partners.FindPartnerByEmail(ctx, email)
-	if err != nil && !errors.Is(err, apperror.ErrNotFound) {
-		return nil, err
-	}
-	if existing != nil {
-		return nil, apperror.New(apperror.ErrAlreadyExists, "Email mitra sudah terdaftar")
-	}
-
+func (s *partnerService) AdminCreatePartnerInvite(ctx context.Context, req dto.AdminCreatePartnerInviteRequest) (*dto.AdminPartnerResponse, error) {
 	setting, _ := s.marketplace.GetPlatformSetting(ctx)
 	sharePct := 20.0
 	if setting != nil && setting.DefaultPartnerSharePercent > 0 {
@@ -529,37 +523,22 @@ func (s *partnerService) AdminCreatePartner(ctx context.Context, req dto.AdminCr
 		sharePct = *req.RevenueSharePercent
 	}
 
-	hash, err := utils.HashPassword(req.Password)
+	inviteToken, err := utils.SecureToken(24)
 	if err != nil {
 		return nil, apperror.ErrInternalServer
 	}
 
-	isActive := true
-	if req.IsActive != nil {
-		isActive = *req.IsActive
-	}
-	cat := strings.TrimSpace(req.VenueCategory)
-	if cat == "" {
-		cat = "Kafe"
-	}
-
 	now := time.Now().UTC()
+	expiresAt := now.Add(7 * 24 * time.Hour)
 	p := &model.Partner{
 		Base:                model.Base{ID: uuid.NewString(), CreatedAt: now, UpdatedAt: now},
-		Email:               email,
-		Phone:               strings.TrimSpace(req.Phone),
-		PasswordHash:        hash,
-		Name:                strings.TrimSpace(req.Name),
 		VenueName:           strings.TrimSpace(req.VenueName),
-		VenueCategory:       cat,
-		Address:             strings.TrimSpace(req.Address),
-		Latitude:            req.Latitude,
-		Longitude:           req.Longitude,
+		VenueCategory:       "Kafe",
 		RevenueSharePercent: sharePct,
-		BankName:            strings.TrimSpace(req.BankName),
-		BankAccountNumber:   strings.TrimSpace(req.BankAccountNumber),
-		BankAccountHolder:   strings.TrimSpace(req.BankAccountHolder),
-		IsActive:            isActive,
+		Status:              model.PartnerStatusInvited,
+		InviteToken:         &inviteToken,
+		InviteExpiresAt:     &expiresAt,
+		IsActive:            true,
 	}
 	if err := s.partners.CreatePartner(ctx, p); err != nil {
 		return nil, err
@@ -568,35 +547,45 @@ func (s *partnerService) AdminCreatePartner(ctx context.Context, req dto.AdminCr
 	return &res, nil
 }
 
-func (s *partnerService) AdminUpdatePartner(ctx context.Context, id string, req dto.AdminUpdatePartnerRequest) (*dto.AdminPartnerResponse, error) {
+func (s *partnerService) AdminRegeneratePartnerInvite(ctx context.Context, id string) (*dto.AdminPartnerResponse, error) {
 	p, err := s.partners.FindPartnerByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	cat := strings.TrimSpace(req.VenueCategory)
-	if cat == "" {
-		cat = "Kafe"
+	if p.Status == model.PartnerStatusActive && p.Username != nil && *p.Username != "" {
+		return nil, apperror.New(apperror.ErrBadRequest, "Akun mitra ini sudah aktif")
 	}
-	p.Name = strings.TrimSpace(req.Name)
-	p.VenueName = strings.TrimSpace(req.VenueName)
-	p.VenueCategory = cat
-	p.Email = strings.ToLower(strings.TrimSpace(req.Email))
-	p.Phone = strings.TrimSpace(req.Phone)
-	p.Address = strings.TrimSpace(req.Address)
-	p.Latitude = req.Latitude
-	p.Longitude = req.Longitude
+	inviteToken, err := utils.SecureToken(24)
+	if err != nil {
+		return nil, apperror.ErrInternalServer
+	}
+	now := time.Now().UTC()
+	expiresAt := now.Add(7 * 24 * time.Hour)
+	p.Status = model.PartnerStatusInvited
+	p.InviteToken = &inviteToken
+	p.InviteExpiresAt = &expiresAt
+	p.UpdatedAt = now
+	if err := s.partners.UpdatePartner(ctx, p); err != nil {
+		return nil, err
+	}
+	return s.AdminGetPartner(ctx, p.ID)
+}
+
+func (s *partnerService) AdminUpdatePartnerSettings(ctx context.Context, id string, req dto.AdminUpdatePartnerSettingsRequest) (*dto.AdminPartnerResponse, error) {
+	p, err := s.partners.FindPartnerByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if p.Status == model.PartnerStatusInvited && strings.TrimSpace(req.VenueName) != "" {
+		p.VenueName = strings.TrimSpace(req.VenueName)
+	}
 	p.RevenueSharePercent = req.RevenueSharePercent
-	p.BankName = strings.TrimSpace(req.BankName)
-	p.BankAccountNumber = strings.TrimSpace(req.BankAccountNumber)
-	p.BankAccountHolder = strings.TrimSpace(req.BankAccountHolder)
 	p.IsActive = req.IsActive
 	p.UpdatedAt = time.Now().UTC()
 
 	if err := s.partners.UpdatePartner(ctx, p); err != nil {
 		return nil, err
 	}
-	_ = s.partners.SyncPartnerLocationToRouters(ctx, p)
-
 	return s.AdminGetPartner(ctx, p.ID)
 }
 
@@ -643,13 +632,17 @@ func (s *partnerService) AdminListWithdrawals(
 	out := make([]dto.AdminWithdrawalResponse, 0, len(items))
 	for _, wd := range items {
 		p := pMap[wd.PartnerID]
+		pEmail := derefStr(p.Email)
+		if pEmail == "" {
+			pEmail = derefStr(p.Username)
+		}
 		out = append(out, dto.AdminWithdrawalResponse{
 			ID:                wd.ID,
 			WithdrawalNumber:  wd.WithdrawalNumber,
 			PartnerID:         wd.PartnerID,
 			PartnerName:       p.Name,
 			VenueName:         p.VenueName,
-			PartnerEmail:      p.Email,
+			PartnerEmail:      pEmail,
 			AmountIDR:         wd.AmountIDR,
 			BankName:          wd.BankName,
 			BankAccountNumber: wd.BankAccountNumber,
@@ -698,34 +691,174 @@ func (s *partnerService) AdminProcessWithdrawal(
 	if p != nil {
 		res.PartnerName = p.Name
 		res.VenueName = p.VenueName
-		res.PartnerEmail = p.Email
+		res.PartnerEmail = derefStr(p.Email)
+		if res.PartnerEmail == "" {
+			res.PartnerEmail = derefStr(p.Username)
+		}
 	}
 	return &res, nil
 }
 
 // ==================== PARTNER PORTAL (STRICT PRIVACY) ====================
 
-func (s *partnerService) LoginPartner(ctx context.Context, req dto.PartnerLoginRequest) (*dto.PartnerAuthResponse, error) {
-	email := strings.ToLower(strings.TrimSpace(req.Email))
-	p, err := s.partners.FindPartnerByEmail(ctx, email)
+func (s *partnerService) GetPartnerInviteInfo(ctx context.Context, token string) (*dto.PartnerInviteInfoResponse, error) {
+	p, err := s.partners.FindPartnerByInviteToken(ctx, strings.TrimSpace(token))
 	if err != nil {
 		if errors.Is(err, apperror.ErrNotFound) {
-			return nil, apperror.New(apperror.ErrUnauthorized, "Email atau kata sandi mitra salah")
+			return nil, apperror.New(apperror.ErrNotFound, "Tautan undangan mitra tidak valid atau sudah digunakan")
+		}
+		return nil, err
+	}
+	if !p.IsActive {
+		return nil, apperror.New(apperror.ErrForbidden, "Undangan mitra sedang dinonaktifkan")
+	}
+	if p.Status == model.PartnerStatusActive && p.Username != nil && *p.Username != "" {
+		return nil, apperror.New(apperror.ErrConflict, "Akun mitra ini sudah diaktifkan, silakan masuk melalui halaman login")
+	}
+	if p.InviteExpiresAt != nil && time.Now().UTC().After(*p.InviteExpiresAt) {
+		return nil, apperror.New(apperror.ErrBadRequest, "Masa berlaku tautan undangan sudah habis, silakan minta tautan baru dari Admin")
+	}
+	cat := p.VenueCategory
+	if cat == "" {
+		cat = "Kafe"
+	}
+	return &dto.PartnerInviteInfoResponse{
+		VenueName:     p.VenueName,
+		VenueCategory: cat,
+		Status:        p.Status,
+		ExpiresAt:     p.InviteExpiresAt,
+	}, nil
+}
+
+func (s *partnerService) ActivatePartnerInvite(ctx context.Context, token string, req dto.PartnerActivateInviteRequest) (*dto.PartnerAuthResponse, error) {
+	p, err := s.partners.FindPartnerByInviteToken(ctx, strings.TrimSpace(token))
+	if err != nil {
+		if errors.Is(err, apperror.ErrNotFound) {
+			return nil, apperror.New(apperror.ErrNotFound, "Tautan undangan mitra tidak valid atau sudah digunakan")
+		}
+		return nil, err
+	}
+	if !p.IsActive {
+		return nil, apperror.New(apperror.ErrForbidden, "Undangan mitra sedang dinonaktifkan")
+	}
+	if p.Status == model.PartnerStatusActive && p.Username != nil && *p.Username != "" {
+		return nil, apperror.New(apperror.ErrConflict, "Akun mitra ini sudah diaktifkan sebelumnya")
+	}
+	if p.InviteExpiresAt != nil && time.Now().UTC().After(*p.InviteExpiresAt) {
+		return nil, apperror.New(apperror.ErrBadRequest, "Masa berlaku tautan undangan sudah habis, silakan minta tautan baru dari Admin")
+	}
+	if req.Latitude == nil || req.Longitude == nil {
+		return nil, apperror.New(apperror.ErrBadRequest, "Titik lokasi tempat usaha wajib ditentukan pada peta")
+	}
+
+	username := strings.ToLower(strings.TrimSpace(req.Username))
+	for _, ch := range username {
+		valid := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '.' || ch == '-'
+		if !valid {
+			return nil, apperror.New(apperror.ErrBadRequest, "Username hanya boleh berisi huruf kecil, angka, titik, garis bawah, atau tanda hubung")
+		}
+	}
+	if existingUser, uErr := s.partners.FindPartnerByUsername(ctx, username); uErr == nil && existingUser != nil && existingUser.ID != p.ID {
+		return nil, apperror.New(apperror.ErrAlreadyExists, "Username sudah digunakan mitra lain, silakan pilih username lain")
+	}
+
+	var emailPtr *string
+	if cleanEmail := strings.ToLower(strings.TrimSpace(req.Email)); cleanEmail != "" {
+		if existingEmail, eErr := s.partners.FindPartnerByEmail(ctx, cleanEmail); eErr == nil && existingEmail != nil && existingEmail.ID != p.ID {
+			return nil, apperror.New(apperror.ErrAlreadyExists, "Email sudah terdaftar pada akun mitra lain")
+		}
+		emailPtr = &cleanEmail
+	}
+
+	hash, err := utils.HashPassword(req.Password)
+	if err != nil {
+		return nil, apperror.ErrInternalServer
+	}
+
+	now := time.Now().UTC()
+	cat := strings.TrimSpace(req.VenueCategory)
+	if cat == "" {
+		cat = "Kafe"
+	}
+
+	p.Username = &username
+	p.Email = emailPtr
+	p.Phone = strings.TrimSpace(req.Phone)
+	p.Name = strings.TrimSpace(req.Name)
+	p.PasswordHash = hash
+	p.VenueName = strings.TrimSpace(req.VenueName)
+	p.VenueCategory = cat
+	p.Address = strings.TrimSpace(req.Address)
+	p.Latitude = req.Latitude
+	p.Longitude = req.Longitude
+	p.BankName = strings.TrimSpace(req.BankName)
+	p.BankAccountNumber = strings.TrimSpace(req.BankAccountNumber)
+	p.BankAccountHolder = strings.TrimSpace(req.BankAccountHolder)
+	p.Status = model.PartnerStatusActive
+	p.InviteToken = nil
+	p.InviteExpiresAt = nil
+	p.ActivatedAt = &now
+	p.LastLoginAt = &now
+	p.UpdatedAt = now
+
+	if err := s.partners.UpdatePartner(ctx, p); err != nil {
+		return nil, err
+	}
+	_ = s.partners.SyncPartnerLocationToRouters(ctx, p)
+
+	jwtTok, err := utils.GenerateJWT(s.jwtSecret, s.jwtIssuer, p.ID, username, middleware.RolePartner, s.jwtTTL)
+	if err != nil {
+		return nil, apperror.ErrInternalServer
+	}
+
+	setting, _ := s.marketplace.GetPlatformSetting(ctx)
+	minWd := int64(50000)
+	if setting != nil && setting.MinWithdrawalAmountIDR > 0 {
+		minWd = setting.MinWithdrawalAmountIDR
+	}
+
+	return &dto.PartnerAuthResponse{
+		Token:     jwtTok,
+		ExpiresAt: now.Add(s.jwtTTL),
+		Partner:   toPartnerProfileDTO(p, minWd),
+	}, nil
+}
+
+func (s *partnerService) LoginPartner(ctx context.Context, req dto.PartnerLoginRequest) (*dto.PartnerAuthResponse, error) {
+	identifier := strings.TrimSpace(req.Identifier)
+	if identifier == "" {
+		identifier = strings.TrimSpace(req.Email)
+	}
+	if identifier == "" {
+		return nil, apperror.New(apperror.ErrBadRequest, "Username atau email wajib diisi")
+	}
+
+	p, err := s.partners.FindPartnerByIdentifier(ctx, identifier)
+	if err != nil {
+		if errors.Is(err, apperror.ErrNotFound) {
+			return nil, apperror.New(apperror.ErrUnauthorized, "Username/email atau kata sandi mitra salah")
 		}
 		return nil, err
 	}
 	if !p.IsActive {
 		return nil, apperror.New(apperror.ErrForbidden, "Akun mitra sedang dinonaktifkan")
 	}
+	if p.Status == model.PartnerStatusInvited || strings.TrimSpace(p.PasswordHash) == "" {
+		return nil, apperror.New(apperror.ErrForbidden, "Akun mitra belum diaktifkan, silakan buka tautan undangan terlebih dahulu")
+	}
 	if !utils.CheckPasswordHash(req.Password, p.PasswordHash) {
-		return nil, apperror.New(apperror.ErrUnauthorized, "Email atau kata sandi mitra salah")
+		return nil, apperror.New(apperror.ErrUnauthorized, "Username/email atau kata sandi mitra salah")
 	}
 
 	now := time.Now().UTC()
 	_ = s.partners.TouchPartnerLogin(ctx, p.ID, now)
 	p.LastLoginAt = &now
 
-	token, err := utils.GenerateJWT(s.jwtSecret, s.jwtIssuer, p.ID, p.Email, middleware.RolePartner, s.jwtTTL)
+	subIdent := derefStr(p.Username)
+	if subIdent == "" {
+		subIdent = derefStr(p.Email)
+	}
+	token, err := utils.GenerateJWT(s.jwtSecret, s.jwtIssuer, p.ID, subIdent, middleware.RolePartner, s.jwtTTL)
 	if err != nil {
 		return nil, apperror.ErrInternalServer
 	}
@@ -764,6 +897,15 @@ func (s *partnerService) UpdatePartnerProfile(ctx context.Context, partnerID str
 	}
 	if req.Latitude == nil || req.Longitude == nil {
 		return nil, apperror.New(apperror.ErrBadRequest, "Titik koordinat lokasi wajib dipilih pada peta")
+	}
+
+	if cleanEmail := strings.ToLower(strings.TrimSpace(req.Email)); cleanEmail != "" {
+		if existingEmail, eErr := s.partners.FindPartnerByEmail(ctx, cleanEmail); eErr == nil && existingEmail != nil && existingEmail.ID != p.ID {
+			return nil, apperror.New(apperror.ErrAlreadyExists, "Email sudah digunakan akun mitra lain")
+		}
+		p.Email = &cleanEmail
+	} else {
+		p.Email = nil
 	}
 
 	p.Name = strings.TrimSpace(req.Name)
@@ -1164,17 +1306,31 @@ func generateWithdrawalNumber(now time.Time) string {
 	return fmt.Sprintf("WD-%s-%d", now.Format("20060102"), suffix)
 }
 
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
 func toAdminPartnerDTO(p *model.Partner, routerNames []string) dto.AdminPartnerResponse {
+	hasCoords := p.Latitude != nil && p.Longitude != nil && strings.TrimSpace(p.Address) != ""
+	status := p.Status
+	if status == "" {
+		status = model.PartnerStatusActive
+	}
 	return dto.AdminPartnerResponse{
 		ID:                  p.ID,
+		Username:            derefStr(p.Username),
 		Name:                p.Name,
 		VenueName:           p.VenueName,
 		VenueCategory:       p.VenueCategory,
-		Email:               p.Email,
+		Email:               derefStr(p.Email),
 		Phone:               p.Phone,
 		Address:             p.Address,
 		Latitude:            p.Latitude,
 		Longitude:           p.Longitude,
+		HasCoordinates:      hasCoords,
 		RevenueSharePercent: p.RevenueSharePercent,
 		WalletBalanceIDR:    p.WalletBalanceIDR,
 		TotalEarnedIDR:      p.TotalEarnedIDR,
@@ -1183,6 +1339,10 @@ func toAdminPartnerDTO(p *model.Partner, routerNames []string) dto.AdminPartnerR
 		BankAccountHolder:   p.BankAccountHolder,
 		RoutersCount:        len(routerNames),
 		RouterNames:         routerNames,
+		Status:              status,
+		InviteToken:         derefStr(p.InviteToken),
+		InviteExpiresAt:     p.InviteExpiresAt,
+		ActivatedAt:         p.ActivatedAt,
 		IsActive:            p.IsActive,
 		LastLoginAt:         p.LastLoginAt,
 		CreatedAt:           p.CreatedAt,
@@ -1191,12 +1351,17 @@ func toAdminPartnerDTO(p *model.Partner, routerNames []string) dto.AdminPartnerR
 
 func toPartnerProfileDTO(p *model.Partner, minWithdrawalIDR int64) dto.PartnerProfileResponse {
 	hasCoords := p.Latitude != nil && p.Longitude != nil && strings.TrimSpace(p.Address) != ""
+	status := p.Status
+	if status == "" {
+		status = model.PartnerStatusActive
+	}
 	return dto.PartnerProfileResponse{
 		ID:                     p.ID,
+		Username:               derefStr(p.Username),
 		Name:                   p.Name,
 		VenueName:              p.VenueName,
 		VenueCategory:          p.VenueCategory,
-		Email:                  p.Email,
+		Email:                  derefStr(p.Email),
 		Phone:                  p.Phone,
 		Address:                p.Address,
 		Latitude:               p.Latitude,
@@ -1208,6 +1373,7 @@ func toPartnerProfileDTO(p *model.Partner, minWithdrawalIDR int64) dto.PartnerPr
 		BankName:               p.BankName,
 		BankAccountNumber:      p.BankAccountNumber,
 		BankAccountHolder:      p.BankAccountHolder,
+		Status:                 status,
 		IsActive:               p.IsActive,
 		LastLoginAt:            p.LastLoginAt,
 		CreatedAt:              p.CreatedAt,
