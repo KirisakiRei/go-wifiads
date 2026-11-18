@@ -1,8 +1,16 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
 	"math"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestExtractGoogleMapsCoordinates(t *testing.T) {
@@ -62,4 +70,49 @@ func TestExtractGoogleMapsCoordinates(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A dead or expired share link answers 404 from Google: the API must say the link
+// is gone instead of blaming the pin coordinates.
+func TestResolveGoogleMapsLinkExpiredLink(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	h := NewMapTileHandler("")
+	h.client = &http.Client{
+		Transport: &rewriteHostTransport{target: srv.URL},
+	}
+
+	r := gin.New()
+	r.POST("/resolve", h.ResolveGoogleMapsLink)
+	body, _ := json.Marshal(map[string]string{"input": "https://maps.app.goo.gl/dsTfsZ8Kf5UKjYe08"})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/resolve", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d (body %s)", w.Code, http.StatusUnprocessableEntity, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "LINK_EXPIRED") {
+		t.Fatalf("expected LINK_EXPIRED error code, got %s", w.Body.String())
+	}
+}
+
+// rewriteHostTransport sends every request to a local test server, keeping the
+// original Host header so the allowlist check still sees a Google Maps host.
+type rewriteHostTransport struct{ target string }
+
+func (rt *rewriteHostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	u, err := url.Parse(rt.target)
+	if err != nil {
+		return nil, err
+	}
+	out := req.Clone(req.Context())
+	out.URL.Scheme = u.Scheme
+	out.URL.Host = u.Host
+	return http.DefaultTransport.RoundTrip(out)
 }

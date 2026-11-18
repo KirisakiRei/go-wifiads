@@ -303,7 +303,8 @@ func (h *MapTileHandler) ResolveGoogleMapsLink(c *gin.Context) {
 
 	visitedURLs := []string{extractedURL}
 	redirectClient := &http.Client{
-		Timeout: 8 * time.Second,
+		Timeout:   8 * time.Second,
+		Transport: h.client.Transport,
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
 			if len(via) >= 7 {
 				return errors.New("terlalu banyak pengalihan tautan")
@@ -342,6 +343,11 @@ func (h *MapTileHandler) ResolveGoogleMapsLink(c *gin.Context) {
 		bodySnippet = string(rawBytes)
 	} else if err != nil && len(visitedURLs) <= 1 {
 		httpx.Error(c, http.StatusBadGateway, "BAD_GATEWAY", "Gagal menghubungi server Google Maps, silakan coba lagi atau gunakan pencarian nama jalan.", nil)
+		return
+	}
+	// A dead or expired share link answers 404: say so instead of "coordinates not found".
+	if resp != nil && resp.StatusCode == http.StatusNotFound {
+		httpx.Error(c, http.StatusUnprocessableEntity, "LINK_EXPIRED", "Tautan Google Maps tidak ditemukan (mungkin sudah kedaluwarsa). Buka ulang lokasi di Google Maps, klik Bagikan, lalu salin tautan yang baru.", nil)
 		return
 	}
 
