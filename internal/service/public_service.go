@@ -138,7 +138,7 @@ func (s *publicService) GetLandingData(ctx context.Context) (*dto.PublicLandingD
 		}
 		imgPrice := int64(math.Round(float64(pricing.BasePriceImageIDR) * mult))
 		vidPrice := int64(math.Round(float64(pricing.BasePriceVideoIDR) * mult))
-		isOnline := r.LastSeenAt != nil && time.Since(*r.LastSeenAt) < 5*time.Minute
+		isOnline := IsRouterOnline(r.LastSeenAt)
 		catSet[strings.ToLower(strings.TrimSpace(category))] = struct{}{}
 
 		locations = append(locations, dto.PublicLocationItem{

@@ -1,7 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -19,6 +23,65 @@ type AdminHandler struct {
 // NewAdminHandler builds the dashboard handler.
 func NewAdminHandler(admin service.AdminService) *AdminHandler {
 	return &AdminHandler{admin: admin}
+}
+
+// RouterHeartbeat receives periodic outbound HTTP heartbeats from MikroTik scheduler
+// (/tool fetch) authenticated with the router's NAS-Identifier and RADIUS secret.
+func (h *AdminHandler) RouterHeartbeat(c *gin.Context) {
+	var payload struct {
+		NASIdentifier string `json:"nas_identifier"`
+		Secret        string `json:"secret"`
+	}
+	nasID := strings.TrimSpace(c.GetHeader("X-NAS-ID"))
+	secret := c.GetHeader("X-NAS-Secret")
+
+	if nasID == "" || secret == "" {
+		raw, err := io.ReadAll(io.LimitReader(c.Request.Body, 4096))
+		if err == nil && len(raw) > 0 {
+			trimmed := strings.TrimSpace(string(raw))
+			if strings.HasPrefix(trimmed, "{") {
+				_ = json.Unmarshal(raw, &payload)
+			} else {
+				for _, line := range strings.Split(trimmed, "\n") {
+					k, v, ok := strings.Cut(line, "=")
+					if !ok {
+						continue
+					}
+					switch strings.TrimSpace(k) {
+					case "nas_identifier", "nasid":
+						payload.NASIdentifier = strings.TrimSpace(v)
+					case "secret":
+						payload.Secret = strings.TrimRight(v, "\r")
+					}
+				}
+			}
+		}
+		if nasID == "" {
+			nasID = strings.TrimSpace(payload.NASIdentifier)
+		}
+		if secret == "" {
+			secret = payload.Secret
+		}
+	}
+
+	if nasID == "" {
+		nasID = strings.TrimSpace(c.PostForm("nas_identifier"))
+	}
+	if secret == "" {
+		secret = c.PostForm("secret")
+	}
+
+	seenAt, err := h.admin.RecordRouterHeartbeat(c.Request.Context(), nasID, secret)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success":        true,
+		"message":        "heartbeat recorded",
+		"nas_identifier": nasID,
+		"last_seen_at":   seenAt,
+	})
 }
 
 // Overview returns the dashboard counters.

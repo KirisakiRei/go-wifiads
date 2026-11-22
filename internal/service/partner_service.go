@@ -1185,10 +1185,12 @@ func (s *partnerService) ListPartnerRouters(ctx context.Context, partnerID strin
 		k := strings.ToLower(strings.TrimSpace(r.NASIdentifier))
 		tel := telMap[k]
 		var activeCnt int64
-		var lastSeen *time.Time
+		lastSeen := r.LastSeenAt
 		if tel != nil {
 			activeCnt = tel.active
-			lastSeen = tel.lastSeen
+			if tel.lastSeen != nil && (lastSeen == nil || tel.lastSeen.After(*lastSeen)) {
+				lastSeen = tel.lastSeen
+			}
 		}
 		addr := p.Address
 		if addr == "" {
@@ -1199,7 +1201,7 @@ func (s *partnerService) ListPartnerRouters(ctx context.Context, partnerID strin
 			Name:                r.Name,
 			VenueName:           p.VenueName,
 			Address:             addr,
-			IsConnected:         lastSeen != nil,
+			IsConnected:         IsRouterOnline(lastSeen),
 			LastSeenAt:          lastSeen,
 			ActiveSessionsCount: activeCnt,
 			AvgDailyVisitors:    avgConn,

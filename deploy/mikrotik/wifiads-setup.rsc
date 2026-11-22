@@ -66,4 +66,13 @@
 
 /file set [find name="hotspot/login.html"] contents=$loginHtml
 
-:put "[+] Provisioning WiFiAds selesai! RADIUS, Walled Garden, dan hotspot/login.html sudah aktif."
+# 7. Heartbeat Berkala ke Server (Setiap 2 Menit agar status router tetap Online)
+/system scheduler remove [find name="wifiads-heartbeat"]
+:local hbUrl ("https://" . $portalDomain . "/api/v1/routers/heartbeat")
+:local hbCmd ("/tool fetch url=\"" . $hbUrl . "\" http-method=post http-data=\"nas_identifier=" . $nasId . "\\nsecret=" . $radiusSecret . "\" keep-result=no")
+/system scheduler add name="wifiads-heartbeat" interval=2m start-time=startup on-event=$hbCmd
+:do {
+    /tool fetch url=$hbUrl http-method=post http-data=("nas_identifier=" . $nasId . "\nsecret=" . $radiusSecret) keep-result=no
+} on-error={}
+
+:put "[+] Provisioning WiFiAds selesai! RADIUS, Walled Garden, hotspot/login.html, dan heartbeat aktif."

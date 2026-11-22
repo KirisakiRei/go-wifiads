@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -524,7 +525,7 @@ func (s *adminService) ListRouters(ctx context.Context) ([]dto.RouterResponse, e
 		}
 		resp.LastSeenAt = lastSeen
 		resp.IsConnected = lastSeen != nil
-		resp.IsOnline = lastSeen != nil && time.Since(*lastSeen) < 5*time.Minute
+		resp.IsOnline = IsRouterOnline(lastSeen)
 		responses = append(responses, resp)
 	}
 	return responses, nil
@@ -1319,4 +1320,37 @@ func (s *adminService) CleanupAuditLogs(ctx context.Context, actorID, actorName,
 		"deleted": deleted,
 	})
 	return &dto.AuditCleanupResponse{Days: days, Deleted: deleted}, nil
+}
+
+// RouterOnlineWindow defines how long a router remains marked Online after its last
+// RADIUS packet or verified MikroTik scheduler heartbeat (2m interval with 6m grace).
+const RouterOnlineWindow = 6 * time.Minute
+
+// IsRouterOnline reports whether lastSeen falls within RouterOnlineWindow.
+func IsRouterOnline(lastSeen *time.Time) bool {
+	return lastSeen != nil && time.Since(*lastSeen) < RouterOnlineWindow
+}
+
+// RecordRouterHeartbeat verifies the router's NAS secret and updates last_seen_at.
+func (s *adminService) RecordRouterHeartbeat(ctx context.Context, nasIdentifier, secret string) (time.Time, error) {
+	nasID := strings.TrimSpace(nasIdentifier)
+	if nasID == "" || secret == "" {
+		return time.Time{}, apperror.New(apperror.ErrUnauthorized, "invalid router heartbeat credentials")
+	}
+	if s.nasClients == nil || s.routers == nil {
+		return time.Time{}, apperror.ErrInternalServer
+	}
+	nas, err := s.nasClients.FindByNASIdentifier(ctx, nasID)
+	if err != nil || nas == nil || !nas.IsActive {
+		return time.Time{}, apperror.New(apperror.ErrUnauthorized, "unknown or inactive NAS identifier")
+	}
+	expected, err := utils.DecryptString(s.radiusSecretKey, nas.SecretCiphertext)
+	if err != nil || expected == "" || subtle.ConstantTimeCompare([]byte(expected), []byte(secret)) != 1 {
+		return time.Time{}, apperror.New(apperror.ErrUnauthorized, "invalid router secret")
+	}
+	now := time.Now().UTC()
+	if err := s.routers.TouchLastSeenByNAS(ctx, nas.NASIdentifier, now); err != nil {
+		return time.Time{}, err
+	}
+	return now, nil
 }

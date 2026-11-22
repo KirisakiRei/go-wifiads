@@ -462,7 +462,10 @@ func (s *marketplaceService) ListMarketplaceRouters(ctx context.Context) ([]dto.
 		}
 
 		nasKey := strings.ToLower(strings.TrimSpace(r.NASIdentifier))
-
+		isOnline := IsRouterOnline(r.LastSeenAt)
+		if !isOnline && activeByNAS[nasKey] > 0 {
+			isOnline = true
+		}
 		out = append(out, dto.MarketplaceRouterPoint{
 			ID:                  r.ID,
 			Name:                displayName,
@@ -477,7 +480,7 @@ func (s *marketplaceService) ListMarketplaceRouters(ctx context.Context) ([]dto.
 			PriceVideoIDR:       priceVid,
 			AvgDailyVisitors:    avgConn,
 			ActiveSessionsCount: activeByNAS[nasKey],
-			IsConnected:         seenByNAS[nasKey],
+			IsConnected:         isOnline,
 		})
 	}
 	return out, nil

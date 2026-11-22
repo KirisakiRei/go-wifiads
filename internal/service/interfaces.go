@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"wifiads/internal/dto"
 	"wifiads/internal/model"
@@ -54,6 +55,7 @@ type AdminService interface {
 	CreateRouter(ctx context.Context, actorID, actorName string, req dto.CreateRouterRequest) (*dto.RouterResponse, error)
 	UpdateRouterVoucherConfig(ctx context.Context, actorID, actorName, routerID string, req dto.UpdateRouterVoucherConfigRequest) (*dto.RouterResponse, error)
 	DeleteRouter(ctx context.Context, actorID, actorName, routerID string) error
+	RecordRouterHeartbeat(ctx context.Context, nasIdentifier, secret string) (time.Time, error)
 	BlockDevice(ctx context.Context, actorID, actorName, mac string, req dto.BlockDeviceRequest) (*dto.BlockedDeviceResponse, error)
 	UnblockDevice(ctx context.Context, actorID, actorName, mac, routerID string) error
 	ListBlockedDevices(ctx context.Context, query dto.BlockedDeviceListQuery) ([]dto.BlockedDeviceResponse, dto.PaginationMeta, error)
