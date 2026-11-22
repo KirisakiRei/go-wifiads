@@ -306,8 +306,8 @@ func (r *partnerRepository) CreateWithdrawal(
 		if err := tx.Model(&model.Partner{}).
 			Where("id = ?", p.ID).
 			Updates(map[string]any{
-				"wallet_balance_idr": newBal,
-				"updated_at":         now,
+				"wallet_balance_id_r": newBal,
+				"updated_at":          now,
 			}).Error; err != nil {
 			return err
 		}
@@ -402,8 +402,8 @@ func (r *partnerRepository) ProcessWithdrawal(
 		if err := tx.Model(&model.Partner{}).
 			Where("id = ?", p.ID).
 			Updates(map[string]any{
-				"wallet_balance_idr": newBal,
-				"updated_at":         now,
+				"wallet_balance_id_r": newBal,
+				"updated_at":          now,
 			}).Error; err != nil {
 			return err
 		}
@@ -502,7 +502,7 @@ func (r *partnerRepository) GetPartnerAdStatsByRouters(
 	}
 	var rows []PartnerAdVenueStat
 	q := r.db.WithContext(ctx).Model(&model.AdImpression{}).
-		Select("advertisement_id, COUNT(*) AS impressions, COUNT(clicked_at) AS clicks, COALESCE(SUM(partner_share_idr), 0) AS earned_idr")
+		Select("advertisement_id, COUNT(*) AS impressions, COUNT(clicked_at) AS clicks, COALESCE(SUM(partner_share_id_r), 0) AS earned_id_r")
 	if len(routerIDs) > 0 {
 		q = q.Where("router_id IN ?", routerIDs)
 	} else {
@@ -603,7 +603,7 @@ func (r *partnerRepository) GetAdvertiserSummaries(ctx context.Context, advertis
 	}
 	var campRows []campRow
 	_ = r.db.WithContext(ctx).Model(&model.Advertisement{}).
-		Select("advertiser_id, status, COUNT(*) AS count, COALESCE(SUM(spent_amount_idr), 0) AS spent").
+		Select("advertiser_id, status, COUNT(*) AS count, COALESCE(SUM(spent_amount_id_r), 0) AS spent").
 		Where("advertiser_id IN ?", advertiserIDs).
 		Group("advertiser_id, status").
 		Scan(&campRows).Error
@@ -623,7 +623,7 @@ func (r *partnerRepository) GetAdvertiserSummaries(ctx context.Context, advertis
 	}
 	var topRows []topRow
 	_ = r.db.WithContext(ctx).Model(&model.TopupInvoice{}).
-		Select("advertiser_id, COALESCE(SUM(amount_idr), 0) AS total").
+		Select("advertiser_id, COALESCE(SUM(amount_id_r), 0) AS total").
 		Where("advertiser_id IN ? AND status = ?", advertiserIDs, model.TopupStatusPaid).
 		Group("advertiser_id").
 		Scan(&topRows).Error
@@ -660,12 +660,12 @@ func (r *partnerRepository) GetFinanceTotals(ctx context.Context, periodSince ti
 	snap := &FinanceTotalsSnapshot{}
 
 	_ = r.db.WithContext(ctx).Model(&model.TopupInvoice{}).
-		Select("COALESCE(SUM(amount_idr), 0)").
+		Select("COALESCE(SUM(amount_id_r), 0)").
 		Where("status = ?", model.TopupStatusPaid).
 		Scan(&snap.TotalTopupPaidIDR).Error
 
 	_ = r.db.WithContext(ctx).Model(&model.TopupInvoice{}).
-		Select("COALESCE(SUM(amount_idr), 0)").
+		Select("COALESCE(SUM(amount_id_r), 0)").
 		Where("status = ? AND verified_at >= ?", model.TopupStatusPaid, periodSince).
 		Scan(&snap.PeriodTopupPaidIDR).Error
 
@@ -674,7 +674,7 @@ func (r *partnerRepository) GetFinanceTotals(ctx context.Context, periodSince ti
 		Count(&snap.WaitingTopupCount).Error
 
 	_ = r.db.WithContext(ctx).Model(&model.TopupInvoice{}).
-		Select("COALESCE(SUM(amount_idr), 0)").
+		Select("COALESCE(SUM(amount_id_r), 0)").
 		Where("status = ?", model.TopupStatusWaitingVerification).
 		Scan(&snap.WaitingTopupIDR).Error
 
@@ -685,14 +685,14 @@ func (r *partnerRepository) GetFinanceTotals(ctx context.Context, periodSince ti
 	}
 	var allImp impTotals
 	_ = r.db.WithContext(ctx).Model(&model.AdImpression{}).
-		Select("COALESCE(SUM(cost_charged_idr), 0) AS gross, COALESCE(SUM(partner_share_idr), 0) AS partner, COALESCE(SUM(CASE WHEN platform_share_idr > 0 OR partner_share_idr > 0 THEN platform_share_idr ELSE cost_charged_idr END), 0) AS platform").
+		Select("COALESCE(SUM(cost_charged_id_r), 0) AS gross, COALESCE(SUM(partner_share_id_r), 0) AS partner, COALESCE(SUM(CASE WHEN platform_share_id_r > 0 OR partner_share_id_r > 0 THEN platform_share_id_r ELSE cost_charged_id_r END), 0) AS platform").
 		Scan(&allImp).Error
 	snap.TotalGrossAdSpendIDR = allImp.Gross
 	snap.TotalPartnerShareIDR = allImp.Partner
 	snap.TotalNetPlatformIDR = allImp.Platform
 
 	_ = r.db.WithContext(ctx).Model(&model.PartnerWithdrawal{}).
-		Select("COALESCE(SUM(amount_idr), 0)").
+		Select("COALESCE(SUM(amount_id_r), 0)").
 		Where("status = ?", model.WithdrawalStatusPaid).
 		Scan(&snap.TotalWithdrawalsPaidIDR).Error
 
@@ -701,16 +701,16 @@ func (r *partnerRepository) GetFinanceTotals(ctx context.Context, periodSince ti
 		Count(&snap.PendingWithdrawalsCount).Error
 
 	_ = r.db.WithContext(ctx).Model(&model.PartnerWithdrawal{}).
-		Select("COALESCE(SUM(amount_idr), 0)").
+		Select("COALESCE(SUM(amount_id_r), 0)").
 		Where("status = ?", model.WithdrawalStatusPending).
 		Scan(&snap.PendingWithdrawalsIDR).Error
 
 	_ = r.db.WithContext(ctx).Model(&model.Advertiser{}).
-		Select("COALESCE(SUM(wallet_balance_idr), 0)").
+		Select("COALESCE(SUM(wallet_balance_id_r), 0)").
 		Scan(&snap.TotalClientWalletIDR).Error
 
 	_ = r.db.WithContext(ctx).Model(&model.Partner{}).
-		Select("COALESCE(SUM(wallet_balance_idr), 0)").
+		Select("COALESCE(SUM(wallet_balance_id_r), 0)").
 		Scan(&snap.TotalPartnerWalletIDR).Error
 
 	return snap, nil

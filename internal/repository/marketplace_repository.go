@@ -431,7 +431,7 @@ func (r *marketplaceRepository) DailySpentByAdIDs(ctx context.Context, adIDs []s
 	}
 	var rows []row
 	if err := r.db.WithContext(ctx).Model(&model.AdImpression{}).
-		Select("advertisement_id, COALESCE(SUM(cost_charged_idr), 0) AS total").
+		Select("advertisement_id, COALESCE(SUM(cost_charged_id_r), 0) AS total").
 		Where("advertisement_id IN ? AND created_at >= ?", adIDs, since).
 		Group("advertisement_id").
 		Scan(&rows).Error; err != nil {
@@ -588,8 +588,8 @@ func (r *marketplaceRepository) AssignSessionAd(ctx context.Context, sessionID s
 	return r.db.WithContext(ctx).Model(&model.PortalSession{}).
 		Where("id = ?", sessionID).
 		Updates(map[string]any{
-			"advertisement_id":     adID,
-			"ad_cost_snapshot_idr": costSnapshotIDR,
+			"advertisement_id":      adID,
+			"ad_cost_snapshot_id_r": costSnapshotIDR,
 		}).Error
 }
 
@@ -630,10 +630,10 @@ func (r *marketplaceRepository) SettlePortalSessionAd(ctx context.Context, sessi
 		if ad.AdvertiserID != nil && *ad.AdvertiserID != "" && cost > 0 {
 			// Atomic conditional wallet deduction to prevent negative balances under concurrency
 			deductRes := tx.Model(&model.Advertiser{}).
-				Where("id = ? AND wallet_balance_idr >= ?", *ad.AdvertiserID, cost).
+				Where("id = ? AND wallet_balance_id_r >= ?", *ad.AdvertiserID, cost).
 				Updates(map[string]any{
-					"wallet_balance_idr": gorm.Expr("wallet_balance_idr - ?", cost),
-					"updated_at":         now,
+					"wallet_balance_id_r": gorm.Expr("wallet_balance_id_r - ?", cost),
+					"updated_at":          now,
 				})
 			if deductRes.Error != nil {
 				return deductRes.Error
@@ -641,7 +641,7 @@ func (r *marketplaceRepository) SettlePortalSessionAd(ctx context.Context, sessi
 			if deductRes.RowsAffected > 0 {
 				charged = cost
 				var updatedAdv model.Advertiser
-				if err := tx.Select("wallet_balance_idr").Where("id = ?", *ad.AdvertiserID).First(&updatedAdv).Error; err != nil {
+				if err := tx.Select("wallet_balance_id_r").Where("id = ?", *ad.AdvertiserID).First(&updatedAdv).Error; err != nil {
 					return err
 				}
 				wtx := model.WalletTransaction{
@@ -695,9 +695,9 @@ func (r *marketplaceRepository) SettlePortalSessionAd(ctx context.Context, sessi
 						if err := tx.Model(&model.Partner{}).
 							Where("id = ?", partner.ID).
 							Updates(map[string]any{
-								"wallet_balance_idr": gorm.Expr("wallet_balance_idr + ?", partnerShare),
-								"total_earned_idr":   gorm.Expr("total_earned_idr + ?", partnerShare),
-								"updated_at":         now,
+								"wallet_balance_id_r": gorm.Expr("wallet_balance_id_r + ?", partnerShare),
+								"total_earned_id_r":   gorm.Expr("total_earned_id_r + ?", partnerShare),
+								"updated_at":          now,
 							}).Error; err != nil {
 							return err
 						}
@@ -738,7 +738,7 @@ func (r *marketplaceRepository) SettlePortalSessionAd(ctx context.Context, sessi
 
 		adUpdates := map[string]any{
 			"impressions_count": gorm.Expr("impressions_count + 1"),
-			"spent_amount_idr":  gorm.Expr("spent_amount_idr + ?", charged),
+			"spent_amount_id_r": gorm.Expr("spent_amount_id_r + ?", charged),
 			"updated_at":        now,
 		}
 		if ad.TotalBudgetIDR > 0 && ad.SpentAmountIDR+charged >= ad.TotalBudgetIDR {
@@ -875,14 +875,14 @@ func (r *marketplaceRepository) VerifyTopupInvoice(
 		if err := tx.Model(&model.Advertiser{}).
 			Where("id = ?", inv.AdvertiserID).
 			Updates(map[string]any{
-				"wallet_balance_idr": gorm.Expr("wallet_balance_idr + ?", inv.AmountIDR),
-				"updated_at":         now,
+				"wallet_balance_id_r": gorm.Expr("wallet_balance_id_r + ?", inv.AmountIDR),
+				"updated_at":          now,
 			}).Error; err != nil {
 			return err
 		}
 
 		var updatedAdv model.Advertiser
-		if err := tx.Select("wallet_balance_idr").Where("id = ?", inv.AdvertiserID).First(&updatedAdv).Error; err != nil {
+		if err := tx.Select("wallet_balance_id_r").Where("id = ?", inv.AdvertiserID).First(&updatedAdv).Error; err != nil {
 			return err
 		}
 

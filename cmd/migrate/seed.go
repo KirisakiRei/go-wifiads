@@ -151,8 +151,8 @@ func ensureMarketplaceDefaults(ctx context.Context, db *gorm.DB, now time.Time) 
 			Where("default_partner_share_percent <= 0").
 			Update("default_partner_share_percent", 20).Error
 		_ = db.WithContext(ctx).Model(&model.PlatformAdSetting{}).
-			Where("min_withdrawal_amount_idr <= 0").
-			Update("min_withdrawal_amount_idr", 50000).Error
+			Where("min_withdrawal_amount_id_r <= 0").
+			Update("min_withdrawal_amount_id_r", 50000).Error
 	}
 
 	// 3. Seed one starter PaymentMethod if none exists
