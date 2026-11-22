@@ -46,6 +46,10 @@ type RouterRepository interface {
 	ListActive(ctx context.Context) ([]model.Router, error)
 	Count(ctx context.Context) (int64, error)
 	UpdateVoucherConfig(ctx context.Context, id string, prefix string, digitCount int, numericOnly bool, defaultProfileID *string, surveyProfileID *string, ttlSeconds int, sessionTimeoutSeconds int) error
+	TouchLastSeen(ctx context.Context, id string, at time.Time) error
+	TouchLastSeenByNAS(ctx context.Context, nasIdentifier string, at time.Time) error
+	SoftDelete(ctx context.Context, id string) error
+	CountActiveCampaigns(ctx context.Context, routerID string) (int64, error)
 }
 
 // NASClientRepository is the persistence contract for RADIUS clients.
@@ -57,6 +61,7 @@ type NASClientRepository interface {
 	FindByNASIdentifier(ctx context.Context, nasIdentifier string) (*model.NASClient, error)
 	ListAll(ctx context.Context) ([]model.NASClient, error)
 	Count(ctx context.Context) (int64, error)
+	DeactivateByRouterID(ctx context.Context, routerID string) error
 }
 
 // AdvertisementRepository is the persistence contract for portal ads.
@@ -68,6 +73,7 @@ type AdvertisementRepository interface {
 	Update(ctx context.Context, ad *model.Advertisement) error
 	Delete(ctx context.Context, id string) error
 	Count(ctx context.Context) (int64, error)
+	RecordWatchMetrics(ctx context.Context, adID string, completed bool, watchSeconds int) error
 }
 
 // PortalSessionRepository is the persistence contract for portal sessions.
@@ -109,6 +115,8 @@ type VoucherRepository interface {
 	CountByStatus(ctx context.Context) (map[string]int64, error)
 	FindLatestByMAC(ctx context.Context, mac string, routerID string) (*model.Voucher, error)
 	UpdatePortalSessionID(ctx context.Context, voucherID string, portalSessionID string) error
+	CreateBatch(ctx context.Context, batch *model.VoucherBatch, vouchers []model.Voucher) error
+	ListBatches(ctx context.Context, page, perPage int, routerID string) ([]model.VoucherBatch, int64, error)
 }
 
 // VisitorFilter narrows a visitor list query.
@@ -136,11 +144,22 @@ type WifiVisitorRepository interface {
 
 // SessionFilter narrows an accounting session list query.
 type SessionFilter struct {
-	Page    int
-	PerPage int
-	Search  string
-	Status  string
-	Order   string
+	Page     int
+	PerPage  int
+	Search   string
+	Status   string
+	RouterID string
+	Order    string
+}
+
+// RouterAccountingStats is the per-NAS aggregate returned by AggregateByNAS.
+type RouterAccountingStats struct {
+	NASIdentifier  string
+	ActiveSessions int64
+	TotalSessions  int64
+	InputOctets    int64
+	OutputOctets   int64
+	LastSeenAt     *time.Time
 }
 
 // AccountingUpdates is the set of mutable accounting fields.
@@ -160,6 +179,8 @@ type AccountingRepository interface {
 	ApplyInterim(ctx context.Context, nasIdentifier, acctSessionID string, updates AccountingUpdates) (*model.AccountingSession, error)
 	ApplyStop(ctx context.Context, nasIdentifier, acctSessionID string, updates AccountingUpdates) (*model.AccountingSession, error)
 	CloseOtherActiveByMAC(ctx context.Context, mac, keepAcctSessionID string, at time.Time) error
+	FindByID(ctx context.Context, id string) (*model.AccountingSession, error)
+	FindActiveByMAC(ctx context.Context, mac string, routerID string) (*model.AccountingSession, error)
 	FindByNASAndAcctSession(ctx context.Context, nasIdentifier, acctSessionID string) (*model.AccountingSession, error)
 	FindByUsernames(ctx context.Context, usernames []string) ([]model.AccountingSession, error)
 	RecordEvent(ctx context.Context, event *model.AccountingEvent) (bool, error)
@@ -167,11 +188,48 @@ type AccountingRepository interface {
 	CountByStatus(ctx context.Context) (map[string]int64, error)
 	MarkStale(ctx context.Context, threshold time.Time) (int64, error)
 	HasActiveSessionForVoucher(ctx context.Context, voucherID string) (bool, error)
+	AggregateByNAS(ctx context.Context) (map[string]RouterAccountingStats, error)
+	CloseByID(ctx context.Context, id string, at time.Time, cause string) error
+}
+
+// BlockedDeviceFilter narrows a blocked-device list query.
+type BlockedDeviceFilter struct {
+	Page     int
+	PerPage  int
+	Search   string
+	RouterID string
+	Order    string
+}
+
+// BlockedDeviceRepository persists MAC blocklist entries.
+type BlockedDeviceRepository interface {
+	Block(ctx context.Context, device *model.BlockedDevice) error
+	UnblockByMAC(ctx context.Context, mac string, routerID string) (int64, error)
+	IsBlocked(ctx context.Context, mac string, routerID string) (*model.BlockedDevice, error)
+	FindBlockedMACs(ctx context.Context, macs []string) (map[string]model.BlockedDevice, error)
+	List(ctx context.Context, filter BlockedDeviceFilter) ([]model.BlockedDevice, int64, error)
+	CountActive(ctx context.Context) (int64, error)
+}
+
+// AuditLogFilter narrows an audit log query.
+type AuditLogFilter struct {
+	Page       int
+	PerPage    int
+	Action     string
+	EntityType string
+	ActorName  string
+	Search     string
+	DateFrom   *time.Time
+	DateTo     *time.Time
+	Order      string
 }
 
 // AuditLogRepository is the append-only audit trail contract.
 type AuditLogRepository interface {
 	Create(ctx context.Context, entry *model.AuditLog) error
+	List(ctx context.Context, filter AuditLogFilter) ([]model.AuditLog, int64, error)
+	DistinctFilters(ctx context.Context) (actions []string, entityTypes []string, err error)
+	CleanupOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 // ConnectProfileRepository is the persistence contract for QoS tier profiles.
@@ -188,4 +246,5 @@ type ConnectProfileRepository interface {
 	Update(ctx context.Context, profile *model.ConnectProfile) error
 	Delete(ctx context.Context, id string) error
 	Count(ctx context.Context) (int64, error)
+	CountRoutersUsingProfile(ctx context.Context, profileID string) (int64, error)
 }

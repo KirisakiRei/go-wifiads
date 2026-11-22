@@ -46,6 +46,8 @@
     radius-mac-format=XX:XX:XX:XX:XX:XX \
     nas-port-type=wireless-802.11
 
+/radius incoming set accept=yes port=3799
+
 # Pastikan User Profile default mengizinkan rate-limit dari RADIUS
 /ip hotspot user profile set [find default=yes] shared-users=1 transparent-proxy=no
 
@@ -60,7 +62,7 @@
     :delay 2s
 }
 
-:local loginHtml ("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"refresh\" content=\"0; url=" . $portalUrl . "?mac=\$(mac)&ip=\$(ip)&nasid=" . $nasId . "&link-login-only=\$(link-login-only-esc)&link-login=\$(link-login-esc)&link-orig=\$(link-orig-esc)\"><title>Mengarahkan ke Portal Wi-Fi...</title></head><body style=\"font-family:sans-serif;background:#f1f5f9;color:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center\"><div style=\"background:#fff;padding:28px 24px;border-radius:16px;border:1px solid #e2e8f0;max-width:340px;width:90%\"><h3 style=\"margin:0 0 8px\">Mengarahkan ke Portal...</h3><p style=\"font-size:14px;color:#64748b;margin:0 0 18px\">Jika tidak berpindah otomatis, ketuk tombol di bawah:</p><a href=\"" . $portalUrl . "?mac=\$(mac)&ip=\$(ip)&nasid=" . $nasId . "&link-login-only=\$(link-login-only-esc)&link-login=\$(link-login-esc)&link-orig=\$(link-orig-esc)\" style=\"display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:14px\">Buka Halaman Login</a></div></body></html>")
+:local loginHtml ("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"refresh\" content=\"0; url=" . $portalUrl . "?mac=\$(mac)&ip=\$(ip)&nasid=" . $nasId . "&link-login-only=\$(link-login-only-esc)&link-login=\$(link-login-esc)&link-orig=\$(link-orig-esc)&link-logout=\$(link-logout-esc)\"><title>Mengarahkan ke Portal Wi-Fi...</title></head><body style=\"font-family:sans-serif;background:#f1f5f9;color:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center\"><div style=\"background:#fff;padding:28px 24px;border-radius:16px;border:1px solid #e2e8f0;max-width:340px;width:90%\"><h3 style=\"margin:0 0 8px\">Mengarahkan ke Portal...</h3><p style=\"font-size:14px;color:#64748b;margin:0 0 18px\">Jika tidak berpindah otomatis, ketuk tombol di bawah:</p><a href=\"" . $portalUrl . "?mac=\$(mac)&ip=\$(ip)&nasid=" . $nasId . "&link-login-only=\$(link-login-only-esc)&link-login=\$(link-login-esc)&link-orig=\$(link-orig-esc)&link-logout=\$(link-logout-esc)\" style=\"display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:14px\">Buka Halaman Login</a></div></body></html>")
 
 /file set [find name="hotspot/login.html"] contents=$loginHtml
 

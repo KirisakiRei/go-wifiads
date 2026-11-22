@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"math"
@@ -19,18 +21,24 @@ import (
 )
 
 type portalService struct {
-	sessions    repository.PortalSessionRepository
-	vouchers    repository.VoucherRepository
-	visitors    repository.WifiVisitorRepository
-	routers     repository.RouterRepository
-	sites       repository.SiteRepository
-	ads         repository.AdvertisementRepository
-	profiles    repository.ConnectProfileRepository
-	marketplace repository.MarketplaceRepository
-	partners    repository.PartnerRepository
-	logger      *slog.Logger
+	sessions       repository.PortalSessionRepository
+	vouchers       repository.VoucherRepository
+	visitors       repository.WifiVisitorRepository
+	routers        repository.RouterRepository
+	sites          repository.SiteRepository
+	ads            repository.AdvertisementRepository
+	profiles       repository.ConnectProfileRepository
+	marketplace    repository.MarketplaceRepository
+	partners       repository.PartnerRepository
+	accounting     repository.AccountingRepository
+	nasClients     repository.NASClientRepository
+	blockedDevices repository.BlockedDeviceRepository
+	questionnaire  repository.QuestionnaireRepository
+	logger         *slog.Logger
 
 	voucherKey            []byte
+	radiusSecretKey       []byte
+	coaDisconnect         CoADisconnectFunc
 	usernamePrefix        string
 	passwordLength        int
 	adDuration            time.Duration
@@ -54,6 +62,12 @@ type PortalServiceOptions struct {
 	DevMode               bool
 	Marketplace           repository.MarketplaceRepository
 	Partners              repository.PartnerRepository
+	Accounting            repository.AccountingRepository
+	NASClients            repository.NASClientRepository
+	BlockedDevices        repository.BlockedDeviceRepository
+	Questionnaire         repository.QuestionnaireRepository
+	RadiusSecretKey       []byte
+	CoADisconnect         CoADisconnectFunc
 }
 
 // NewPortalService builds the visitor portal service.
@@ -78,8 +92,14 @@ func NewPortalService(
 		ads:                   ads,
 		marketplace:           opts.Marketplace,
 		partners:              opts.Partners,
+		accounting:            opts.Accounting,
+		nasClients:            opts.NASClients,
+		blockedDevices:        opts.BlockedDevices,
+		questionnaire:         opts.Questionnaire,
 		logger:                logger,
 		voucherKey:            opts.VoucherKey,
+		radiusSecretKey:       opts.RadiusSecretKey,
+		coaDisconnect:         opts.CoADisconnect,
 		usernamePrefix:        opts.UsernamePrefix,
 		passwordLength:        opts.PasswordLength,
 		adDuration:            opts.AdDuration,
@@ -264,6 +284,17 @@ func (s *portalService) CreateSession(ctx context.Context, req dto.CreatePortalS
 	now := time.Now().UTC()
 	deviceMAC := utils.NormalizeMAC(req.MAC)
 
+	// Guard: reject blocked devices before creating sessions or deducting advertiser budgets.
+	if deviceMAC != "" && s.blockedDevices != nil {
+		if blocked, bErr := s.blockedDevices.IsBlocked(ctx, deviceMAC, router.ID); bErr == nil && blocked != nil {
+			msg := "Perangkat Anda diblokir oleh administrator jaringan."
+			if strings.TrimSpace(blocked.Reason) != "" {
+				msg = "Perangkat Anda diblokir: " + strings.TrimSpace(blocked.Reason)
+			}
+			return nil, apperror.New(apperror.ErrForbidden, msg)
+		}
+	}
+
 	// Anti-Ad-Spam & Auto-Reconnect:
 	// If this device (MAC) already has an ACTIVE, unexpired voucher on this router,
 	// immediately return its credentials so the portal auto-authenticates the user
@@ -385,6 +416,7 @@ func (s *portalService) CreateSession(ctx context.Context, req dto.CreatePortalS
 	}
 
 	adDur := s.sessionAdDuration(ctx, session)
+	defProf, survProf := s.resolveProfileSummaries(ctx, router)
 	return &dto.PortalSessionResponse{
 		SessionToken:       token,
 		Status:             session.Status,
@@ -395,7 +427,43 @@ func (s *portalService) CreateSession(ctx context.Context, req dto.CreatePortalS
 		SiteName:           site.Name,
 		RouterName:         router.Name,
 		AuthMode:           authModeOf(session),
+		DefaultProfile:     defProf,
+		SurveyProfile:      survProf,
 	}, nil
+}
+
+func (s *portalService) resolveProfileSummaries(ctx context.Context, router *model.Router) (*dto.PortalProfileSummary, *dto.PortalProfileSummary) {
+	if s.profiles == nil || router == nil {
+		return nil, nil
+	}
+	toSummary := func(p *model.ConnectProfile) *dto.PortalProfileSummary {
+		if p == nil {
+			return nil
+		}
+		return &dto.PortalProfileSummary{
+			DisplayName:           p.DisplayName,
+			BandwidthDownKbps:     p.BandwidthDownKbps,
+			BandwidthUpKbps:       p.BandwidthUpKbps,
+			SessionTimeoutSeconds: p.SessionTimeoutSeconds,
+		}
+	}
+	var defProf, survProf *dto.PortalProfileSummary
+	if router.DefaultProfileID != nil && *router.DefaultProfileID != "" {
+		if p, err := s.profiles.FindByID(ctx, *router.DefaultProfileID); err == nil {
+			defProf = toSummary(p)
+		}
+	}
+	if defProf == nil {
+		if p, err := s.profiles.FindDefault(ctx); err == nil {
+			defProf = toSummary(p)
+		}
+	}
+	if router.SurveyProfileID != nil && *router.SurveyProfileID != "" {
+		if p, err := s.profiles.FindByID(ctx, *router.SurveyProfileID); err == nil {
+			survProf = toSummary(p)
+		}
+	}
+	return defProf, survProf
 }
 
 func authModeOf(session *model.PortalSession) string {
@@ -478,8 +546,29 @@ func (s *portalService) SubmitSurvey(ctx context.Context, token string, req dto.
 		}
 	}
 
-	// Pilih profile: metode survey selesai jika ada isi email/phone, metode skip survey jika lewatkan.
-	skipped := req.Skipped || (strings.TrimSpace(req.Email) == "" && strings.TrimSpace(req.Phone) == "")
+	// Extract email/phone from dynamic answers if legacy fields are empty.
+	email := strings.TrimSpace(req.Email)
+	phone := strings.TrimSpace(req.Phone)
+	hasDynamicAnswer := false
+	cleanedAnswers := make(map[string]string, len(req.Answers))
+	for k, v := range req.Answers {
+		val := strings.TrimSpace(v)
+		if val == "" {
+			continue
+		}
+		hasDynamicAnswer = true
+		cleanedAnswers[k] = val
+		lk := strings.ToLower(k)
+		if email == "" && strings.Contains(lk, "email") {
+			email = val
+		}
+		if phone == "" && (strings.Contains(lk, "phone") || strings.Contains(lk, "whatsapp") || strings.Contains(lk, "hp") || strings.Contains(lk, "wa")) {
+			phone = val
+		}
+	}
+
+	// Pilih profile: metode survey selesai jika ada isi email/phone atau jawaban dinamis, metode skip survey jika lewatkan.
+	skipped := req.Skipped || (email == "" && phone == "" && !hasDynamicAnswer)
 	var profile *model.ConnectProfile
 	if skipped {
 		if router != nil && router.DefaultProfileID != nil && *router.DefaultProfileID != "" {
@@ -510,8 +599,29 @@ func (s *portalService) SubmitSurvey(ctx context.Context, token string, req dto.
 	}
 
 	// Simpan ke session.
-	if err := s.sessions.SaveSurvey(ctx, session.ID, req.Email, req.Phone, skipped, profile.ID); err != nil {
+	if err := s.sessions.SaveSurvey(ctx, session.ID, email, phone, skipped, profile.ID); err != nil {
 		return nil, err
+	}
+	if !skipped && s.questionnaire != nil && (hasDynamicAnswer || email != "" || phone != "") {
+		if email != "" {
+			if _, ok := cleanedAnswers["email"]; !ok {
+				cleanedAnswers["email"] = email
+			}
+		}
+		if phone != "" {
+			if _, ok := cleanedAnswers["phone"]; !ok {
+				cleanedAnswers["phone"] = phone
+			}
+		}
+		ansJSON, _ := json.Marshal(cleanedAnswers)
+		_ = s.questionnaire.CreateSubmission(ctx, &model.QuestionnaireSubmission{
+			ID:              uuid.NewString(),
+			PortalSessionID: session.ID,
+			RouterID:        session.RouterID,
+			MAC:             session.DeviceMAC,
+			Answers:         string(ansJSON),
+			CreatedAt:       now,
+		})
 	}
 
 	return &dto.SubmitSurveyResponse{
@@ -606,6 +716,258 @@ func (s *portalService) Connect(ctx context.Context, token string) (*dto.Connect
 	return resp, err
 }
 
+// GetActiveSession checks whether a guest MAC already has an ACTIVE RADIUS
+// accounting session on the requested router so /portal can display live status.
+func (s *portalService) GetActiveSession(ctx context.Context, mac, nasIdentifier string) (*dto.ActivePortalSessionResponse, error) {
+	normMAC := utils.NormalizeMAC(mac)
+	if normMAC == "" || s.accounting == nil {
+		return &dto.ActivePortalSessionResponse{Active: false}, nil
+	}
+	var routerID, routerName string
+	if strings.TrimSpace(nasIdentifier) != "" && s.routers != nil {
+		if rtr, err := s.routers.FindByNASIdentifier(ctx, strings.TrimSpace(nasIdentifier)); err == nil && rtr != nil {
+			routerID = rtr.ID
+			routerName = rtr.Name
+		}
+	}
+	sess, err := s.accounting.FindActiveByMAC(ctx, normMAC, routerID)
+	if err != nil {
+		if errors.Is(err, apperror.ErrNotFound) {
+			return &dto.ActivePortalSessionResponse{Active: false}, nil
+		}
+		return nil, err
+	}
+	if routerName == "" && sess.RouterID != nil && s.routers != nil {
+		if rtr, rErr := s.routers.FindByID(ctx, *sess.RouterID); rErr == nil && rtr != nil {
+			routerName = rtr.Name
+		}
+	}
+
+	now := time.Now().UTC()
+	uptime := sess.SessionTimeSeconds
+	if sess.StartedAt != nil {
+		elapsed := int64(now.Sub(*sess.StartedAt).Seconds())
+		if elapsed > uptime {
+			uptime = elapsed
+		}
+	}
+
+	timeoutSec := s.defaultSessionTimeout
+	var downKbps, upKbps int
+	var profileDisplay string
+	var expiresAt *time.Time
+	if sess.VoucherID != nil && *sess.VoucherID != "" && s.vouchers != nil {
+		if v, vErr := s.vouchers.FindByID(ctx, *sess.VoucherID); vErr == nil && v != nil {
+			if v.SessionTimeoutSeconds > 0 {
+				timeoutSec = v.SessionTimeoutSeconds
+			}
+			downKbps = v.BandwidthDownKbps
+			upKbps = v.BandwidthUpKbps
+			exp := v.ExpiresAt
+			expiresAt = &exp
+			if v.ProfileID != nil && *v.ProfileID != "" && s.profiles != nil {
+				if p, pErr := s.profiles.FindByID(ctx, *v.ProfileID); pErr == nil && p != nil {
+					profileDisplay = p.DisplayName
+				}
+			}
+		}
+	}
+	if expiresAt == nil && sess.StartedAt != nil && timeoutSec > 0 {
+		exp := sess.StartedAt.Add(time.Duration(timeoutSec) * time.Second)
+		expiresAt = &exp
+	}
+	var remaining int64
+	if expiresAt != nil {
+		if rem := int64(expiresAt.Sub(now).Seconds()); rem > 0 {
+			remaining = rem
+		}
+	} else if timeoutSec > 0 && int64(timeoutSec) > uptime {
+		remaining = int64(timeoutSec) - uptime
+	}
+	if profileDisplay == "" {
+		if downKbps >= 3000 {
+			profileDisplay = "Akses Cepat"
+		} else {
+			profileDisplay = "Standar"
+		}
+	}
+
+	return &dto.ActivePortalSessionResponse{
+		Active:                true,
+		SessionID:             sess.ID,
+		Username:              sess.Username,
+		RouterName:            routerName,
+		ProfileDisplay:        profileDisplay,
+		FramedIP:              sess.FramedIPAddress,
+		BandwidthDownKbps:     downKbps,
+		BandwidthUpKbps:       upKbps,
+		UptimeSeconds:         uptime,
+		RemainingSeconds:      remaining,
+		SessionTimeoutSeconds: timeoutSec,
+		InputOctets:           sess.InputOctets,
+		OutputOctets:          sess.OutputOctets,
+		StartedAt:             sess.StartedAt,
+		ExpiresAt:             expiresAt,
+	}, nil
+}
+
+// DisconnectActiveSession lets a visitor terminate their own live hotspot session.
+// Attempts RADIUS CoA Disconnect first; always returns safe fallback logout URL when supplied.
+func (s *portalService) DisconnectActiveSession(ctx context.Context, req dto.PortalDisconnectRequest) (*dto.PortalDisconnectResponse, error) {
+	normMAC := utils.NormalizeMAC(req.MAC)
+	if normMAC == "" {
+		return nil, apperror.New(apperror.ErrBadRequest, "Alamat MAC tidak valid")
+	}
+	logoutURL := ""
+	if rawLogout := strings.TrimSpace(req.LinkLogout); rawLogout != "" {
+		if u, err := url.Parse(rawLogout); err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" {
+			logoutURL = rawLogout
+		}
+	}
+	if s.accounting == nil {
+		return &dto.PortalDisconnectResponse{
+			Disconnected: logoutURL != "",
+			CoASent:      false,
+			Message:      "Silakan selesaikan pemutusan melalui halaman logout router.",
+			LogoutURL:    logoutURL,
+		}, nil
+	}
+
+	var routerID string
+	if strings.TrimSpace(req.NASIdentifier) != "" && s.routers != nil {
+		if rtr, err := s.routers.FindByNASIdentifier(ctx, strings.TrimSpace(req.NASIdentifier)); err == nil && rtr != nil {
+			routerID = rtr.ID
+		}
+	}
+	sess, err := s.accounting.FindActiveByMAC(ctx, normMAC, routerID)
+	if err != nil {
+		if errors.Is(err, apperror.ErrNotFound) {
+			return &dto.PortalDisconnectResponse{
+				Disconnected: true,
+				CoASent:      false,
+				Message:      "Tidak ada sesi aktif yang ditemukan.",
+				LogoutURL:    logoutURL,
+			}, nil
+		}
+		return nil, err
+	}
+
+	coaSent := false
+	if s.coaDisconnect != nil && s.nasClients != nil && len(s.radiusSecretKey) > 0 {
+		var nas *model.NASClient
+		if sess.RouterID != nil && *sess.RouterID != "" {
+			nas, _ = s.nasClients.FindByRouterID(ctx, *sess.RouterID)
+		}
+		if nas == nil && sess.NASIdentifier != "" {
+			nas, _ = s.nasClients.FindByNASIdentifier(ctx, sess.NASIdentifier)
+		}
+		if nas != nil && nas.IPAddress != "" {
+			if secret, decErr := utils.DecryptString(s.radiusSecretKey, nas.SecretCiphertext); decErr == nil && secret != "" {
+				if coaErr := s.coaDisconnect(ctx, nas.IPAddress, secret, sess.AcctSessionID, sess.Username, sess.FramedIPAddress, sess.CallingStationID); coaErr == nil {
+					coaSent = true
+				} else {
+					s.logger.Warn("portal self-disconnect CoA failed, falling back to link-logout",
+						slog.String("nas_ip", nas.IPAddress),
+						slog.String("error", coaErr.Error()),
+					)
+				}
+			}
+		}
+	}
+
+	now := time.Now().UTC()
+	if coaSent {
+		_, _ = s.accounting.ApplyStop(ctx, sess.NASIdentifier, sess.AcctSessionID, repository.AccountingUpdates{
+			Status:             model.AccountingSessionStatusClosed,
+			LastAccountingAt:   &now,
+			StoppedAt:          &now,
+			SessionTimeSeconds: sess.SessionTimeSeconds,
+			InputOctets:        sess.InputOctets,
+			OutputOctets:       sess.OutputOctets,
+			TerminateCause:     "User-Request",
+		})
+		if sess.VoucherID != nil && *sess.VoucherID != "" && s.vouchers != nil {
+			_ = s.vouchers.MarkUsed(ctx, *sess.VoucherID, now)
+		}
+		return &dto.PortalDisconnectResponse{
+			Disconnected: true,
+			CoASent:      true,
+			Message:      "Koneksi Wi-Fi berhasil diputuskan.",
+			LogoutURL:    logoutURL,
+		}, nil
+	}
+
+	return &dto.PortalDisconnectResponse{
+		Disconnected: logoutURL != "",
+		CoASent:      false,
+		Message:      "Mengarahkan ke halaman logout router untuk memutus koneksi.",
+		LogoutURL:    logoutURL,
+	}, nil
+}
+
+// RedeemVoucher validates an admin-issued manual voucher against the current portal session
+// and returns the MikroTik login payload without watching an ad or billing any advertiser.
+func (s *portalService) RedeemVoucher(ctx context.Context, token string, req dto.RedeemVoucherRequest) (*dto.ConnectResponse, error) {
+	session, err := s.sessions.FindByTokenHash(ctx, utils.HashToken(token))
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	if session.Status == model.PortalSessionStatusExpired || session.Status == model.PortalSessionStatusFailed {
+		return nil, apperror.New(apperror.ErrForbidden, "Sesi portal sudah tidak aktif, silakan muat ulang halaman")
+	}
+	if now.After(session.ExpiresAt) {
+		_ = s.sessions.UpdateStatus(ctx, session.ID, model.PortalSessionStatusExpired)
+		return nil, apperror.New(apperror.ErrForbidden, "Sesi portal kedaluwarsa, silakan muat ulang halaman")
+	}
+
+	username := strings.TrimSpace(req.Username)
+	if username == "" {
+		username = strings.TrimSpace(req.Code)
+	}
+	if username == "" {
+		return nil, apperror.New(apperror.ErrBadRequest, "Masukkan kode voucher terlebih dahulu")
+	}
+
+	voucher, err := s.vouchers.FindByUsername(ctx, username)
+	if err != nil {
+		if errors.Is(err, apperror.ErrNotFound) {
+			return nil, apperror.New(apperror.ErrNotFound, "Kode voucher tidak ditemukan")
+		}
+		return nil, err
+	}
+	if voucher.Status != model.VoucherStatusIssued {
+		return nil, apperror.New(apperror.ErrBadRequest, "Voucher sudah digunakan, dicabut, atau tidak aktif")
+	}
+	if !now.Before(voucher.ExpiresAt) {
+		_ = s.vouchers.UpdateStatus(ctx, voucher.ID, model.VoucherStatusExpired)
+		return nil, apperror.New(apperror.ErrBadRequest, "Masa berlaku voucher sudah habis")
+	}
+	if voucher.RouterID != "" && session.RouterID != "" && voucher.RouterID != session.RouterID {
+		return nil, apperror.New(apperror.ErrForbidden, "Voucher ini tidak berlaku untuk lokasi Wi-Fi ini")
+	}
+
+	plainPass, err := utils.DecryptString(s.voucherKey, voucher.PasswordCiphertext)
+	if err != nil {
+		return nil, apperror.ErrInternalServer
+	}
+	suppliedPass := strings.TrimSpace(req.Password)
+	if suppliedPass != "" {
+		if subtle.ConstantTimeCompare([]byte(suppliedPass), []byte(plainPass)) != 1 {
+			return nil, apperror.New(apperror.ErrUnauthorized, "Kata sandi voucher tidak cocok")
+		}
+	} else if voucher.CreatedBy == "" || voucher.CreatedBy == "portal" {
+		// Prevent guessing auto-generated portal voucher usernames without password.
+		return nil, apperror.New(apperror.ErrUnauthorized, "Voucher ini memerlukan kata sandi")
+	}
+
+	if err := s.vouchers.UpdatePortalSessionID(ctx, voucher.ID, session.ID); err != nil {
+		return nil, err
+	}
+	s.afterVoucherIssued(ctx, session, voucher, now)
+	return s.buildConnectResponse(session, voucher)
+}
+
 func (s *portalService) RecordPromoClick(ctx context.Context, token string) (string, error) {
 	session, err := s.sessions.FindByTokenHash(ctx, utils.HashToken(token))
 	if err != nil {
@@ -673,10 +1035,16 @@ func (s *portalService) issueVoucher(ctx context.Context, session *model.PortalS
 			resolvedProfile = prof
 		}
 	}
+	var quotaBytes int64
+	sharedUsers := 1
 	if resolvedProfile != nil {
 		profileID = &resolvedProfile.ID
 		bwUp = resolvedProfile.BandwidthUpKbps
 		bwDown = resolvedProfile.BandwidthDownKbps
+		quotaBytes = resolvedProfile.QuotaBytes
+		if resolvedProfile.SharedUsers > 0 {
+			sharedUsers = resolvedProfile.SharedUsers
+		}
 		if resolvedProfile.SessionTimeoutSeconds > 0 {
 			sessionTimeout = resolvedProfile.SessionTimeoutSeconds
 		}
@@ -734,6 +1102,8 @@ func (s *portalService) issueVoucher(ctx context.Context, session *model.PortalS
 			ProfileID:             profileID,
 			BandwidthUpKbps:       bwUp,
 			BandwidthDownKbps:     bwDown,
+			QuotaBytes:            quotaBytes,
+			SharedUsers:           sharedUsers,
 		}
 		createErr := s.vouchers.CreateForPortalSession(ctx, voucher)
 		if createErr == nil {

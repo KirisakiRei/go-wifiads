@@ -16,10 +16,12 @@ import (
 )
 
 type radiusAuthService struct {
-	nas      repository.NASClientRepository
-	vouchers repository.VoucherRepository
-	accounts repository.AccountingRepository
-	logger   *slog.Logger
+	nas            repository.NASClientRepository
+	vouchers       repository.VoucherRepository
+	accounts       repository.AccountingRepository
+	blockedDevices repository.BlockedDeviceRepository
+	routers        repository.RouterRepository
+	logger         *slog.Logger
 
 	voucherKey      []byte
 	radiusSecretKey []byte
@@ -40,6 +42,20 @@ func NewRadiusAuthService(
 		logger:          logger,
 		voucherKey:      voucherKey,
 		radiusSecretKey: radiusSecretKey,
+	}
+}
+
+// SetBlockedDeviceRepo attaches an optional MAC blocklist repository for RADIUS auth enforcement.
+func SetRadiusBlockedDeviceRepo(auth RadiusAuthenticator, repo repository.BlockedDeviceRepository) {
+	if s, ok := auth.(*radiusAuthService); ok {
+		s.blockedDevices = repo
+	}
+}
+
+// SetRadiusRouterRepo attaches an optional router repository to record lightweight last_seen_at heartbeats.
+func SetRadiusRouterRepo(auth RadiusAuthenticator, repo repository.RouterRepository) {
+	if s, ok := auth.(*radiusAuthService); ok {
+		s.routers = repo
 	}
 }
 
@@ -139,6 +155,23 @@ func (s *radiusAuthService) Authenticate(ctx context.Context, req RadiusAuthRequ
 	if !nas.IsActive {
 		return reject("nas_disabled"), nil
 	}
+	if s.routers != nil && nas.RouterID != "" {
+		routerID := nas.RouterID
+		go func() {
+			tctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_ = s.routers.TouchLastSeen(tctx, routerID, time.Now().UTC())
+		}()
+	}
+	if s.blockedDevices != nil {
+		if normMAC := utils.NormalizeMAC(req.CallingStationID); normMAC != "" {
+			if blocked, bErr := s.blockedDevices.IsBlocked(ctx, normMAC, nas.RouterID); bErr != nil {
+				s.logger.Warn("failed to check blocked mac", slog.String("mac", normMAC), slog.String("error", bErr.Error()))
+			} else if blocked != nil {
+				return reject("Device blocked"), nil
+			}
+		}
+	}
 	if req.NASIdentifier != "" && !strings.EqualFold(req.NASIdentifier, nas.NASIdentifier) {
 		return reject("nas_mismatch"), nil
 	}
@@ -224,6 +257,8 @@ func (s *radiusAuthService) Authenticate(ctx context.Context, req RadiusAuthRequ
 		SessionTimeoutSeconds: sessionTimeout,
 		BandwidthUpKbps:       voucher.BandwidthUpKbps,
 		BandwidthDownKbps:     voucher.BandwidthDownKbps,
+		QuotaBytes:            voucher.QuotaBytes,
+		SharedUsers:           voucher.SharedUsers,
 	}, nil
 }
 

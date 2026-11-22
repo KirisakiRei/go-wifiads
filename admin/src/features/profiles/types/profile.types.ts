@@ -8,6 +8,8 @@ export interface ConnectProfile {
   bandwidth_down_kbps: number
   session_timeout_seconds: number
   voucher_ttl_seconds: number
+  quota_bytes?: number
+  shared_users?: number
   is_active: boolean
   created_at: string
   updated_at: string
@@ -22,6 +24,8 @@ export interface CreateProfilePayload {
   bandwidth_down_kbps: number
   session_timeout_seconds: number
   voucher_ttl_seconds?: number
+  quota_bytes?: number
+  shared_users?: number
   is_active?: boolean
 }
 
@@ -33,5 +37,7 @@ export interface UpdateProfilePayload {
   bandwidth_down_kbps: number
   session_timeout_seconds: number
   voucher_ttl_seconds?: number
+  quota_bytes?: number
+  shared_users?: number
   is_active?: boolean
 }

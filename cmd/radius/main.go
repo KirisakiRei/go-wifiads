@@ -34,9 +34,14 @@ func main() {
 	vouchers := repository.NewVoucherRepository(db)
 	accounting := repository.NewAccountingRepository(db)
 	visitors := repository.NewWifiVisitorRepository(db)
+	blockedDevices := repository.NewBlockedDeviceRepository(db)
+	routers := repository.NewRouterRepository(db)
 
 	authService := service.NewRadiusAuthService(nasClients, vouchers, accounting, logger, cfg.Keys.VoucherKey, cfg.Keys.RadiusSecretKey)
+	service.SetRadiusBlockedDeviceRepo(authService, blockedDevices)
+	service.SetRadiusRouterRepo(authService, routers)
 	accountingService := service.NewAccountingService(accounting, vouchers, visitors, logger, cfg.StaleAfter())
+	service.SetAccountingRouterRepo(accountingService, routers)
 
 	server := radius.NewServer(authService, accountingService, logger, cfg.Radius.AuthAddr, cfg.Radius.AcctAddr)
 

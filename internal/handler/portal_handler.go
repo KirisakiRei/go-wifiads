@@ -17,12 +17,18 @@ import (
 // PortalHandler serves the visitor portal and its JSON API.
 type PortalHandler struct {
 	portal            service.PortalService
+	ops               service.PlatformOpsService
 	adDurationSeconds int
 }
 
 // NewPortalHandler builds the portal handler.
 func NewPortalHandler(portal service.PortalService, adDurationSeconds int) *PortalHandler {
 	return &PortalHandler{portal: portal, adDurationSeconds: adDurationSeconds}
+}
+
+// SetPlatformOps attaches optional questionnaire & settings service for dynamic portal rendering.
+func (h *PortalHandler) SetPlatformOps(ops service.PlatformOpsService) {
+	h.ops = ops
 }
 
 // ShowPortalPage renders the captive portal shell. All Hotspot parameters stay
@@ -54,6 +60,25 @@ func (h *PortalHandler) ShowPortalPage(c *gin.Context) {
 		}
 	}
 
+	var activeFields []dto.QuestionnaireFieldResponse
+	portalSettings := map[string]string{
+		"portal.brand_name":            "WiFiAds",
+		"portal.welcome_title":         "Wi-Fi Gratis Siap Digunakan",
+		"portal.welcome_subtitle":      "Tonton iklan singkat untuk terhubung ke internet cepat.",
+		"portal.default_redirect_url":  "https://www.google.com",
+		"portal.enable_voucher_redeem": "true",
+		"portal.enable_survey":         "true",
+		"portal.ad_fallback_seconds":   "15",
+	}
+	if h.ops != nil {
+		if fields, fErr := h.ops.ListQuestionnaireFields(c.Request.Context(), true); fErr == nil {
+			activeFields = fields
+		}
+		for k, v := range h.ops.GetPortalSettingsMap(c.Request.Context()) {
+			portalSettings[k] = v
+		}
+	}
+
 	configJSON, err := json.Marshal(gin.H{
 		"adId":          adID,
 		"adDuration":    adDur,
@@ -63,10 +88,13 @@ func (h *PortalHandler) ShowPortalPage(c *gin.Context) {
 		"ip":            c.Query("ip"),
 		"linkLoginOnly": c.Query("link-login-only"),
 		"linkLogin":     c.Query("link-login"),
+		"linkLogout":    c.Query("link-logout"),
 		"linkOrig":      c.DefaultQuery("link-orig", c.Query("dst")),
 		"chapId":        c.Query("chap-id"),
 		"chapChallenge": c.Query("chap-challenge"),
 		"nasIdentifier": nasIdentifier,
+		"fields":        activeFields,
+		"settings":      portalSettings,
 	})
 	if err != nil {
 		writeError(c, err)
@@ -78,12 +106,9 @@ func (h *PortalHandler) ShowPortalPage(c *gin.Context) {
 		"AdDurationSeconds": adDur,
 		"IsVideo":           isVideo,
 		"Year":              time.Now().Year(),
-		// configJSON was produced by encoding/json, which escapes <, > and &
-		// as \u003c / \u003e / \u0026, so it cannot terminate the surrounding
-		// <script type="application/json"> element. Marking it template.JS
-		// keeps it as raw JSON (not an extra-quoted JSON string) so the browser
-		// can JSON.parse it straight into an object.
-		"PortalConfigJSON": template.JS(configJSON), //nolint:gosec // see comment: JSON-marshalled, angle brackets escaped.
+		"ActiveFields":      activeFields,
+		"PortalSettings":    portalSettings,
+		"PortalConfigJSON":  template.JS(configJSON), //nolint:gosec // JSON-marshalled, angle brackets escaped.
 	})
 }
 
@@ -133,6 +158,46 @@ func (h *PortalHandler) SubmitSurvey(c *gin.Context) {
 		return
 	}
 	httpx.OK(c, "Survey submitted", res)
+}
+
+// GetActiveSession checks if the guest MAC already has an online hotspot session.
+func (h *PortalHandler) GetActiveSession(c *gin.Context) {
+	mac := c.Query("mac")
+	nasid := c.DefaultQuery("nasid", c.Query("nas-identifier"))
+	res, err := h.portal.GetActiveSession(c.Request.Context(), mac, nasid)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Active session status", res)
+}
+
+// DisconnectActiveSession allows a guest to disconnect their live hotspot session.
+func (h *PortalHandler) DisconnectActiveSession(c *gin.Context) {
+	var req dto.PortalDisconnectRequest
+	if !bindJSON(c, &req, "Invalid disconnect payload") {
+		return
+	}
+	res, err := h.portal.DisconnectActiveSession(c.Request.Context(), req)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, res.Message, res)
+}
+
+// RedeemVoucher validates a manual voucher code and returns the Hotspot login payload.
+func (h *PortalHandler) RedeemVoucher(c *gin.Context) {
+	var req dto.RedeemVoucherRequest
+	if !bindJSON(c, &req, "Invalid voucher payload") {
+		return
+	}
+	res, err := h.portal.RedeemVoucher(c.Request.Context(), c.Param("token"), req)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Voucher redeemed", res)
 }
 
 // ClickPromo records an ad click and redirects the visitor to the advertiser's promo URL.

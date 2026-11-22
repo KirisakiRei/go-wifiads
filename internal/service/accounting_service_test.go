@@ -113,6 +113,44 @@ func (f *fakeAccountingRepo) HasActiveSessionForVoucher(ctx context.Context, vid
 	return false, nil
 }
 
+func (f *fakeAccountingRepo) FindByID(ctx context.Context, id string) (*model.AccountingSession, error) {
+	for _, s := range f.sessions {
+		if s.ID == id {
+			cp := *s
+			return &cp, nil
+		}
+	}
+	return nil, apperror.ErrNotFound
+}
+
+func (f *fakeAccountingRepo) FindActiveByMAC(ctx context.Context, mac string, routerID string) (*model.AccountingSession, error) {
+	for _, s := range f.sessions {
+		if s.CallingStationID == mac && s.Status == model.AccountingSessionStatusActive {
+			if routerID != "" && (s.RouterID == nil || *s.RouterID != routerID) {
+				continue
+			}
+			cp := *s
+			return &cp, nil
+		}
+	}
+	return nil, apperror.ErrNotFound
+}
+
+func (f *fakeAccountingRepo) AggregateByNAS(ctx context.Context) (map[string]repository.RouterAccountingStats, error) {
+	return map[string]repository.RouterAccountingStats{}, nil
+}
+
+func (f *fakeAccountingRepo) CloseByID(ctx context.Context, id string, at time.Time, cause string) error {
+	for _, s := range f.sessions {
+		if s.ID == id {
+			s.Status = model.AccountingSessionStatusClosed
+			s.StoppedAt = &at
+			s.TerminateCause = cause
+		}
+	}
+	return nil
+}
+
 func (f *fakeAccountingRepo) FindByUsernames(ctx context.Context, usernames []string) ([]model.AccountingSession, error) {
 	var result []model.AccountingSession
 	uMap := make(map[string]bool)

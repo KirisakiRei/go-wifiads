@@ -8,6 +8,7 @@ export interface RouterDevice {
   nas_identifier: string
   ip_address: string
   nas_ip_address?: string
+  radius_server_ip?: string
   radius_secret?: string
   portal_base_url?: string
   status: string
@@ -31,6 +32,7 @@ export interface RouterDevice {
   voucher_ttl_seconds?: number
   session_timeout_seconds?: number
   is_connected?: boolean
+  is_online?: boolean
   last_seen_at?: string
   active_sessions_count?: number
   total_sessions_count?: number

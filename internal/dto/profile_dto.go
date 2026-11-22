@@ -13,6 +13,8 @@ type ConnectProfileResponse struct {
 	BandwidthDownKbps     int       `json:"bandwidth_down_kbps"`
 	SessionTimeoutSeconds int       `json:"session_timeout_seconds"`
 	VoucherTTLSeconds     int       `json:"voucher_ttl_seconds"`
+	QuotaBytes            int64     `json:"quota_bytes"`
+	SharedUsers           int       `json:"shared_users"`
 	IsActive              bool      `json:"is_active"`
 	CreatedAt             time.Time `json:"created_at"`
 	UpdatedAt             time.Time `json:"updated_at"`
@@ -28,6 +30,8 @@ type CreateProfileRequest struct {
 	BandwidthDownKbps     int    `json:"bandwidth_down_kbps" binding:"min=0"`
 	SessionTimeoutSeconds int    `json:"session_timeout_seconds" binding:"required,min=60"`
 	VoucherTTLSeconds     int    `json:"voucher_ttl_seconds" binding:"min=60"`
+	QuotaBytes            int64  `json:"quota_bytes" binding:"min=0"`
+	SharedUsers           int    `json:"shared_users" binding:"omitempty,min=1,max=50"`
 	IsActive              bool   `json:"is_active"`
 }
 
@@ -40,5 +44,7 @@ type UpdateProfileRequest struct {
 	BandwidthDownKbps     int    `json:"bandwidth_down_kbps" binding:"min=0"`
 	SessionTimeoutSeconds int    `json:"session_timeout_seconds" binding:"required,min=60"`
 	VoucherTTLSeconds     int    `json:"voucher_ttl_seconds" binding:"min=60"`
+	QuotaBytes            int64  `json:"quota_bytes" binding:"min=0"`
+	SharedUsers           int    `json:"shared_users" binding:"omitempty,min=1,max=50"`
 	IsActive              bool   `json:"is_active"`
 }

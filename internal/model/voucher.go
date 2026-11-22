@@ -29,8 +29,11 @@ type Voucher struct {
 	ExpiresAt             time.Time  `gorm:"not null;index" json:"expires_at"`
 	SessionTimeoutSeconds int        `gorm:"not null;default:3600" json:"session_timeout_seconds"`
 	ProfileID             *string    `gorm:"type:uuid;index" json:"profile_id,omitempty"`
+	BatchID               *string    `gorm:"type:uuid;index" json:"batch_id,omitempty"`
 	BandwidthUpKbps       int        `gorm:"not null;default:0" json:"bandwidth_up_kbps"`
 	BandwidthDownKbps     int        `gorm:"not null;default:0" json:"bandwidth_down_kbps"`
+	QuotaBytes            int64      `gorm:"not null;default:0" json:"quota_bytes"`
+	SharedUsers           int        `gorm:"not null;default:1" json:"shared_users"`
 	UsedAt                *time.Time `json:"used_at,omitempty"`
 }
 

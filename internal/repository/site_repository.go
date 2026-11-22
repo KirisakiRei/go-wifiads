@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -121,4 +122,37 @@ func (r *routerRepository) UpdateVoucherConfig(ctx context.Context, id string, p
 		"session_timeout_seconds": sessionTimeoutSeconds,
 	}
 	return r.db.WithContext(ctx).Model(&model.Router{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r *routerRepository) TouchLastSeen(ctx context.Context, id string, at time.Time) error {
+	if id == "" {
+		return nil
+	}
+	return r.db.WithContext(ctx).Model(&model.Router{}).Where("id = ?", id).UpdateColumn("last_seen_at", at).Error
+}
+
+func (r *routerRepository) TouchLastSeenByNAS(ctx context.Context, nasIdentifier string, at time.Time) error {
+	if nasIdentifier == "" {
+		return nil
+	}
+	return r.db.WithContext(ctx).Model(&model.Router{}).Where("nas_identifier = ?", nasIdentifier).UpdateColumn("last_seen_at", at).Error
+}
+
+func (r *routerRepository) SoftDelete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.Router{}).Where("id = ?", id).Update("status", model.RouterStatusInactive).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", id).Delete(&model.Router{}).Error
+	})
+}
+
+func (r *routerRepository) CountActiveCampaigns(ctx context.Context, routerID string) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).
+		Table("app.advertisement_routers ar").
+		Joins("JOIN app.advertisements a ON a.id = ar.advertisement_id").
+		Where("ar.router_id = ? AND a.deleted_at IS NULL AND a.status IN ?", routerID, []string{"ACTIVE", "PENDING_REVIEW"}).
+		Count(&total).Error
+	return total, err
 }

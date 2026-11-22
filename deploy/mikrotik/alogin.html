@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="2; url=$(link-redirect)">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="-1">
+  <title>Terhubung — WiFiAds</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f1f5f9;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 16px;
+      text-align: center;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 28px 24px;
+      max-width: 360px;
+      width: 100%;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06);
+    }
+    .badge {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: #dcfce7;
+      color: #16a34a;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+    h2 { margin: 0 0 8px; font-size: 18px; }
+    p { margin: 0 0 18px; font-size: 14px; color: #64748b; line-height: 1.5; }
+    .btn {
+      display: inline-block;
+      background: #2563eb;
+      color: #ffffff;
+      text-decoration: none;
+      padding: 12px 22px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .sub { display: block; margin-top: 12px; font-size: 12px; color: #64748b; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">&#10003;</div>
+    <h2>Internet Sudah Aktif!</h2>
+    <p>Anda telah terhubung ke jaringan Wi-Fi. Halaman akan dialihkan secara otomatis.</p>
+    <a class="btn" href="$(link-redirect)">Lanjut ke Internet</a>
+    <a class="sub" href="$(link-status)">Lihat Status Koneksi</a>
+  </div>
+</body>
+</html>

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"wifiads/internal/model"
+	"wifiads/internal/repository"
 	"wifiads/internal/service"
 	"wifiads/pkg/apperror"
 	"wifiads/pkg/utils"
@@ -54,6 +55,14 @@ func (f *fakeNASRepo) FindByNASIdentifier(ctx context.Context, nas string) (*mod
 	return nil, apperror.ErrNotFound
 }
 func (f *fakeNASRepo) Count(ctx context.Context) (int64, error) { return int64(len(f.byIP)), nil }
+func (f *fakeNASRepo) DeactivateByRouterID(ctx context.Context, routerID string) error {
+	for _, c := range f.byIP {
+		if c.RouterID == routerID {
+			c.IsActive = false
+		}
+	}
+	return nil
+}
 
 type authFixture struct {
 	svc      service.RadiusAuthenticator
@@ -311,5 +320,58 @@ func TestLookupNASReturnsSecret(t *testing.T) {
 	}
 	if secret != "super-secret" {
 		t.Fatalf("expected decrypted secret, got %q", secret)
+	}
+}
+
+type fakeBlockedDeviceRepo struct {
+	blocked map[string]*model.BlockedDevice
+}
+
+func (f *fakeBlockedDeviceRepo) Block(ctx context.Context, d *model.BlockedDevice) error {
+	f.blocked[utils.NormalizeMAC(d.MAC)] = d
+	return nil
+}
+func (f *fakeBlockedDeviceRepo) UnblockByMAC(ctx context.Context, mac, routerID string) (int64, error) {
+	delete(f.blocked, utils.NormalizeMAC(mac))
+	return 1, nil
+}
+func (f *fakeBlockedDeviceRepo) IsBlocked(ctx context.Context, mac, routerID string) (*model.BlockedDevice, error) {
+	if d, ok := f.blocked[utils.NormalizeMAC(mac)]; ok {
+		return d, nil
+	}
+	return nil, nil
+}
+func (f *fakeBlockedDeviceRepo) FindBlockedMACs(ctx context.Context, macs []string) (map[string]model.BlockedDevice, error) {
+	return map[string]model.BlockedDevice{}, nil
+}
+func (f *fakeBlockedDeviceRepo) List(ctx context.Context, filter repository.BlockedDeviceFilter) ([]model.BlockedDevice, int64, error) {
+	return nil, 0, nil
+}
+func (f *fakeBlockedDeviceRepo) CountActive(ctx context.Context) (int64, error) {
+	return int64(len(f.blocked)), nil
+}
+
+func TestAuthenticateRejectsBlockedMAC(t *testing.T) {
+	f := newAuthFixture(t)
+	service.SetRadiusBlockedDeviceRepo(f.svc, &fakeBlockedDeviceRepo{
+		blocked: map[string]*model.BlockedDevice{
+			utils.NormalizeMAC(testMAC): {ID: "b1", MAC: utils.NormalizeMAC(testMAC), Reason: "Abuse"},
+		},
+	})
+	res, err := f.svc.Authenticate(context.Background(), service.RadiusAuthRequest{
+		RemoteIP:         testNASIP + ":1812",
+		NASIdentifier:    testNASID,
+		Username:         f.voucher.Username,
+		Password:         f.password,
+		CallingStationID: testMAC,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Accepted {
+		t.Fatalf("expected blocked MAC to be rejected")
+	}
+	if res.Reason != "Device blocked" {
+		t.Fatalf("expected reason 'Device blocked', got %q", res.Reason)
 	}
 }

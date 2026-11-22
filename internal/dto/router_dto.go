@@ -14,6 +14,7 @@ type RouterResponse struct {
 	IPAddress             string     `json:"ip_address"`
 	NASIPAddress          string     `json:"nas_ip_address"`
 	RadiusSecret          string     `json:"radius_secret"`
+	RadiusServerIP        string     `json:"radius_server_ip,omitempty"`
 	PortalBaseURL         string     `json:"portal_base_url"`
 	Status                string     `json:"status"`
 	Description           string     `json:"description"`
@@ -36,6 +37,7 @@ type RouterResponse struct {
 	VoucherTTLSeconds     int        `json:"voucher_ttl_seconds"`
 	SessionTimeoutSeconds int        `json:"session_timeout_seconds"`
 	IsConnected           bool       `json:"is_connected"`
+	IsOnline              bool       `json:"is_online"`
 	LastSeenAt            *time.Time `json:"last_seen_at,omitempty"`
 	ActiveSessionsCount   int64      `json:"active_sessions_count"`
 	TotalSessionsCount    int64      `json:"total_sessions_count"`

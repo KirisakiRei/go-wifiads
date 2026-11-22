@@ -91,6 +91,7 @@ type PortalConfig struct {
 
 // RadiusConfig controls both RADIUS listeners and accounting behaviour.
 type RadiusConfig struct {
+	PublicIP          string
 	AuthAddr          string
 	AcctAddr          string
 	StaleAfterSeconds int
@@ -160,6 +161,7 @@ func Load() (*Config, error) {
 			DevMode:               envBool("PORTAL_DEV_MODE", false),
 		},
 		Radius: RadiusConfig{
+			PublicIP:          env("RADIUS_PUBLIC_IP", ""),
 			AuthAddr:          env("RADIUS_AUTH_ADDR", ":1812"),
 			AcctAddr:          env("RADIUS_ACCT_ADDR", ":1813"),
 			StaleAfterSeconds: envInt("RADIUS_STALE_AFTER_SECONDS", 900),

@@ -51,3 +51,61 @@ func (h *VoucherHandler) List(c *gin.Context) {
 	}
 	httpx.Paginated(c, "Vouchers retrieved", items, meta)
 }
+
+// Revoke revokes a voucher and disconnects its active RADIUS session if any.
+func (h *VoucherHandler) Revoke(c *gin.Context) {
+	res, err := h.vouchers.Revoke(
+		c.Request.Context(),
+		middleware.AdminID(c),
+		middleware.AdminUsername(c),
+		c.Param("id"),
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Voucher berhasil dicabut", res)
+}
+
+// CreateBatch generates 1..500 vouchers atomically and returns plaintext codes once.
+func (h *VoucherHandler) CreateBatch(c *gin.Context) {
+	var req dto.CreateVoucherBatchRequest
+	if !bindJSON(c, &req, "Invalid voucher batch payload") {
+		return
+	}
+	res, err := h.vouchers.CreateBatch(
+		c.Request.Context(),
+		middleware.AdminID(c),
+		middleware.AdminUsername(c),
+		req,
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.Created(c, "Batch voucher berhasil dibuat", res)
+}
+
+// ListBatches returns paginated batch generation history.
+func (h *VoucherHandler) ListBatches(c *gin.Context) {
+	var query dto.VoucherBatchListQuery
+	if !bindQuery(c, &query, "Invalid voucher batch query") {
+		return
+	}
+	items, meta, err := h.vouchers.ListBatches(c.Request.Context(), query)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.Paginated(c, "Batch voucher retrieved", items, meta)
+}
+
+// Summary returns voucher status breakdown counts.
+func (h *VoucherHandler) Summary(c *gin.Context) {
+	res, err := h.vouchers.Summary(c.Request.Context())
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Voucher summary retrieved", res)
+}

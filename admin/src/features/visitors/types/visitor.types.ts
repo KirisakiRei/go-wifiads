@@ -22,4 +22,22 @@ export interface Visitor {
   output_octets?: number
   voucher_expires_at?: string
   voucher_status?: string
+  is_blocked?: boolean
+  block_reason?: string
+}
+
+export interface BlockedDevice {
+  id: string
+  mac: string
+  router_id?: string
+  router_name?: string
+  reason: string
+  blocked_by: string
+  created_at: string
+}
+
+export interface BlockDeviceInput {
+  reason?: string
+  router_id?: string
+  disconnect_active?: boolean
 }

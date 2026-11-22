@@ -294,6 +294,16 @@ func (f *fakeRouterListRepo) Count(ctx context.Context) (int64, error) {
 func (f *fakeRouterListRepo) UpdateVoucherConfig(ctx context.Context, id string, prefix string, digitCount int, numericOnly bool, defaultProfileID *string, surveyProfileID *string, ttlSeconds int, sessionTimeoutSeconds int) error {
 	return nil
 }
+func (f *fakeRouterListRepo) TouchLastSeen(ctx context.Context, id string, at time.Time) error {
+	return nil
+}
+func (f *fakeRouterListRepo) TouchLastSeenByNAS(ctx context.Context, nasIdentifier string, at time.Time) error {
+	return nil
+}
+func (f *fakeRouterListRepo) SoftDelete(ctx context.Context, id string) error { return nil }
+func (f *fakeRouterListRepo) CountActiveCampaigns(ctx context.Context, routerID string) (int64, error) {
+	return 0, nil
+}
 
 func TestMarketplaceEndToEndFlow(t *testing.T) {
 	ctx := context.Background()

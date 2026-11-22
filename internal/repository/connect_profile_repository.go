@@ -101,3 +101,11 @@ func (r *connectProfileRepository) Count(ctx context.Context) (int64, error) {
 	}
 	return count, nil
 }
+
+func (r *connectProfileRepository) CountRoutersUsingProfile(ctx context.Context, profileID string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.Router{}).
+		Where("status = ? AND (default_profile_id = ? OR survey_profile_id = ?)", model.RouterStatusActive, profileID, profileID).
+		Count(&count).Error
+	return count, err
+}

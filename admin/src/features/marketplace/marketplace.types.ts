@@ -433,3 +433,26 @@ export interface PartnerWalletTxItem {
   description: string
   created_at: string
 }
+
+export interface PartnerLeadItem {
+  id: string
+  venue_name: string
+  category: string
+  city: string
+  address: string
+  daily_traffic_estimate: number
+  contact_name: string
+  whatsapp: string
+  notes: string
+  admin_note: string
+  status: 'NEW' | 'CONTACTED' | 'CONVERTED' | 'REJECTED'
+  converted_partner_id?: string | null
+  invite_token?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ConvertPartnerLeadResult {
+  lead: PartnerLeadItem
+  partner: AdminPartnerItem
+}

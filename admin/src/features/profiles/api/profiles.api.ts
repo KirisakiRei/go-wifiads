@@ -8,4 +8,6 @@ export const profilesApi = {
     apiClient<ConnectProfile>('/api/v1/admin/profiles', { ...jsonBody(data), method: 'POST' }),
   update: ({ id, data }: { id: string; data: UpdateProfilePayload }) =>
     apiClient<ConnectProfile>(`/api/v1/admin/profiles/${id}`, { ...jsonBody(data), method: 'PUT' }),
+  delete: (id: string) =>
+    apiClient<null>(`/api/v1/admin/profiles/${id}`, { method: 'DELETE' }),
 }

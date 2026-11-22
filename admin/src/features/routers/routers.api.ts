@@ -13,4 +13,8 @@ export const routersApi = {
       method: 'PUT',
       ...jsonBody(input),
     }),
+  delete: (routerId: string) =>
+    apiClient<null>(`/api/v1/admin/routers/${routerId}`, {
+      method: 'DELETE',
+    }),
 }

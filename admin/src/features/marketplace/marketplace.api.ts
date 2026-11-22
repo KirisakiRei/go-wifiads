@@ -16,11 +16,13 @@ import type {
   PartnerAdItem,
   PartnerAuthResult,
   PartnerInviteInfo,
+  PartnerLeadItem,
   PartnerOverview,
   PartnerProfile,
   PartnerRouterItem,
   PartnerWalletTxItem,
   PartnerWithdrawalItem,
+  ConvertPartnerLeadResult,
   PaymentMethod,
   PlatformAdSetting,
   TopupInvoiceItem,
@@ -246,6 +248,24 @@ export const adminMarketplaceApi = {
     }),
   uploadPayoutProof: (file: File, onProgress?: (info: UploadProgressInfo) => void) =>
     uploadMultipartWithProgress('/api/v1/admin/partners/withdrawals/upload-proof', file, onProgress),
+  listPartnerLeads: (
+    params: { page?: number; per_page?: number; status?: string; search?: string } = {}
+  ) => apiRequest<PartnerLeadItem[]>(`/api/v1/admin/partner-leads${buildQuery(params)}`),
+  updatePartnerLeadStatus: (
+    id: string,
+    data: { status: 'NEW' | 'CONTACTED' | 'CONVERTED' | 'REJECTED'; admin_note?: string }
+  ) =>
+    apiClient<PartnerLeadItem>(`/api/v1/admin/partner-leads/${id}/status`, {
+      method: 'PUT',
+      ...jsonBody(data),
+    }),
+  convertPartnerLead: (id: string, revenue_share_percent?: number) =>
+    apiClient<ConvertPartnerLeadResult>(`/api/v1/admin/partner-leads/${id}/convert`, {
+      method: 'POST',
+      ...jsonBody(
+        revenue_share_percent !== undefined ? { revenue_share_percent } : {}
+      ),
+    }),
 }
 
 // ==================== ADVERTISER CLIENT API ====================

@@ -13,6 +13,7 @@ import {
   Sliders,
   Store,
   Trash2,
+  UserPlus,
   Wallet,
   X,
 } from 'lucide-react'
@@ -40,8 +41,12 @@ function buildInviteUrl(token?: string): string {
 }
 
 export function AdminPartnersPage() {
+  const [activeTab, setActiveTab] = useState<'partners' | 'leads'>('partners')
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
+  const [leadPage, setLeadPage] = useState(1)
+  const [leadStatus, setLeadStatus] = useState('')
+  const [leadSearch, setLeadSearch] = useState('')
 
   // Create Invite Modal
   const [showInviteFormModal, setShowInviteFormModal] = useState(false)
@@ -74,6 +79,39 @@ export function AdminPartnersPage() {
         per_page: 20,
         search: search || undefined,
       }),
+  })
+
+  const { data: leadsRes, isPending: leadsPending } = useQuery({
+    queryKey: ['admin-partner-leads', leadPage, leadStatus, leadSearch],
+    queryFn: () =>
+      adminMarketplaceApi.listPartnerLeads({
+        page: leadPage,
+        per_page: 20,
+        status: leadStatus || undefined,
+        search: leadSearch || undefined,
+      }),
+  })
+
+  const convertLeadMutation = useMutation({
+    mutationFn: (id: string) =>
+      adminMarketplaceApi.convertPartnerLead(id, settingsData?.default_partner_share_percent ?? 20),
+    onSuccess: (res) => {
+      toast.success(`"${res.partner.venue_name}" berhasil dikonversi jadi slot Mitra!`)
+      queryClient.invalidateQueries({ queryKey: ['admin-partner-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-partners'] })
+      setActiveInvitePartner(res.partner)
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  const updateLeadStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: 'NEW' | 'CONTACTED' | 'CONVERTED' | 'REJECTED' }) =>
+      adminMarketplaceApi.updatePartnerLeadStatus(id, { status }),
+    onSuccess: () => {
+      toast.success('Status calon mitra diperbarui')
+      queryClient.invalidateQueries({ queryKey: ['admin-partner-leads'] })
+    },
+    onError: (err: Error) => toast.error(err.message),
   })
 
   const openCreateInviteModal = () => {
@@ -166,6 +204,9 @@ export function AdminPartnersPage() {
 
   const partners = partnersRes?.data || []
   const meta = partnersRes?.meta
+  const leads = leadsRes?.data || []
+  const leadsMeta = leadsRes?.meta
+  const newLeadsCount = leads.filter((l) => l.status === 'NEW').length
 
   const activeCount = partners.filter((p) => p.status === 'ACTIVE' && p.is_active).length
   const invitedCount = partners.filter((p) => p.status === 'INVITED').length
@@ -214,6 +255,62 @@ export function AdminPartnersPage() {
           />
         </KpiGrid>
 
+        <div
+          style={{
+            display: 'inline-flex',
+            gap: '0.4rem',
+            padding: '0.3rem',
+            background: '#eef2ff',
+            borderRadius: '10px',
+            marginBottom: '1rem',
+          }}
+        >
+          <button
+            type="button"
+            className={activeTab === 'partners' ? 'btn btn-primary' : 'btn btn-secondary'}
+            style={{
+              padding: '0.45rem 0.9rem',
+              fontSize: '13px',
+              border: 'none',
+              background: activeTab === 'partners' ? 'var(--primary)' : 'transparent',
+              color: activeTab === 'partners' ? '#fff' : 'var(--on-surface-variant)',
+            }}
+            onClick={() => setActiveTab('partners')}
+          >
+            <Store size={14} /> Mitra Terdaftar ({meta?.total_items ?? partners.length})
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'leads' ? 'btn btn-primary' : 'btn btn-secondary'}
+            style={{
+              padding: '0.45rem 0.9rem',
+              fontSize: '13px',
+              border: 'none',
+              background: activeTab === 'leads' ? 'var(--primary)' : 'transparent',
+              color: activeTab === 'leads' ? '#fff' : 'var(--on-surface-variant)',
+            }}
+            onClick={() => setActiveTab('leads')}
+          >
+            <UserPlus size={14} /> Calon Mitra (Leads)
+            {newLeadsCount > 0 && (
+              <span
+                style={{
+                  marginLeft: '0.35rem',
+                  background: activeTab === 'leads' ? 'rgba(255,255,255,0.22)' : '#dc2626',
+                  color: '#fff',
+                  padding: '0.05rem 0.45rem',
+                  borderRadius: '999px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                }}
+              >
+                {newLeadsCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {activeTab === 'partners' ? (
         <DataTableCard
           title="Manajemen Undangan, Akun & Porsi Bagi Hasil Mitra"
           icon={Store}
@@ -461,6 +558,188 @@ export function AdminPartnersPage() {
             </>
           )}
         </DataTableCard>
+        ) : (
+        <DataTableCard
+          title="Pendaftaran Calon Mitra dari Website Publik"
+          icon={UserPlus}
+          toolbarActions={
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <select
+                value={leadStatus}
+                onChange={(e) => {
+                  setLeadStatus(e.target.value)
+                  setLeadPage(1)
+                }}
+                style={{
+                  padding: '0.45rem 0.7rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: '#fff',
+                  fontSize: '13px',
+                }}
+              >
+                <option value="">Semua Status</option>
+                <option value="NEW">Baru (NEW)</option>
+                <option value="CONTACTED">Sudah Dihubungi</option>
+                <option value="CONVERTED">Dikonversi jadi Mitra</option>
+                <option value="REJECTED">Ditolak</option>
+              </select>
+              <SearchInput
+                value={leadSearch}
+                onSearchChange={(val) => {
+                  setLeadSearch(val)
+                  setLeadPage(1)
+                }}
+                placeholder="Cari venue, kota, atau WA..."
+              />
+            </div>
+          }
+        >
+          {leadsPending ? (
+            <div style={{ padding: '2rem' }}>
+              <LoadingState />
+            </div>
+          ) : leads.length === 0 ? (
+            <div style={{ padding: '2rem' }}>
+              <EmptyState
+                title="Belum ada pendaftaran calon mitra"
+                description="Calon pemilik lokasi yang mendaftar melalui halaman /daftar-mitra akan tampil di sini."
+              />
+            </div>
+          ) : (
+            <>
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Lokasi / Venue</th>
+                      <th>Kota & Alamat</th>
+                      <th>Kontak & WA</th>
+                      <th>Est. Pengunjung/Hari</th>
+                      <th>Status</th>
+                      <th style={{ textAlign: 'right' }}>Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leads.map((lead) => {
+                      const cleanWA = lead.whatsapp.replace(/[^0-9]/g, '').replace(/^0/, '62')
+                      return (
+                        <tr key={lead.id}>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{lead.venue_name}</div>
+                            <div style={{ fontSize: '12px', color: '#64748b' }}>
+                              {lead.category} · {formatDate(lead.created_at)}
+                            </div>
+                            {lead.notes && (
+                              <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px' }}>
+                                "{lead.notes}"
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ fontSize: '12.5px' }}>
+                            <div style={{ fontWeight: 500 }}>{lead.city}</div>
+                            {lead.address && (
+                              <div style={{ color: '#64748b', fontSize: '11.5px' }}>{lead.address}</div>
+                            )}
+                          </td>
+                          <td style={{ fontSize: '12.5px' }}>
+                            <div style={{ fontWeight: 500 }}>{lead.contact_name}</div>
+                            <a
+                              href={`https://wa.me/${cleanWA}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ color: '#059669', fontSize: '12px', textDecoration: 'none' }}
+                            >
+                              WA: {lead.whatsapp}
+                            </a>
+                          </td>
+                          <td style={{ fontWeight: 600 }}>
+                            {lead.daily_traffic_estimate.toLocaleString('id-ID')} / hari
+                          </td>
+                          <td>
+                            {lead.status === 'CONVERTED' ? (
+                              <StatusPill variant="active" dot>
+                                Dikonversi
+                              </StatusPill>
+                            ) : lead.status === 'CONTACTED' ? (
+                              <StatusPill variant="basic" dot>
+                                Dihubungi
+                              </StatusPill>
+                            ) : lead.status === 'REJECTED' ? (
+                              <StatusPill variant="expired">Ditolak</StatusPill>
+                            ) : (
+                              <StatusPill variant="warning" dot>
+                                Baru
+                              </StatusPill>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <div style={{ display: 'inline-flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                              {lead.status !== 'CONVERTED' ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    style={{ padding: '0.35rem 0.65rem', fontSize: '11.5px' }}
+                                    disabled={convertLeadMutation.isPending}
+                                    onClick={() => convertLeadMutation.mutate(lead.id)}
+                                  >
+                                    <CheckCircle2 size={13} /> Convert & Invite
+                                  </button>
+                                  {lead.status === 'NEW' && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-secondary"
+                                      style={{ padding: '0.35rem 0.55rem', fontSize: '11.5px' }}
+                                      onClick={() =>
+                                        updateLeadStatusMutation.mutate({ id: lead.id, status: 'CONTACTED' })
+                                      }
+                                    >
+                                      Dihubungi
+                                    </button>
+                                  )}
+                                  {lead.status !== 'REJECTED' && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-secondary"
+                                      style={{ padding: '0.35rem 0.55rem', fontSize: '11.5px', color: '#dc2626' }}
+                                      onClick={() =>
+                                        updateLeadStatusMutation.mutate({ id: lead.id, status: 'REJECTED' })
+                                      }
+                                    >
+                                      Tolak
+                                    </button>
+                                  )}
+                                </>
+                              ) : lead.invite_token ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.35rem 0.65rem', fontSize: '11.5px', color: '#059669' }}
+                                  onClick={() =>
+                                    copyText(buildInviteUrl(lead.invite_token), 'Tautan undangan mitra')
+                                  }
+                                >
+                                  <Copy size={13} /> Salin Link Invite
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Sudah jadi mitra</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {leadsMeta && leadsMeta.total_pages > 1 && (
+                <Pagination meta={leadsMeta} onPageChange={setLeadPage} />
+              )}
+            </>
+          )}
+        </DataTableCard>
+        )}
       </div>
 
       {/* Modal 1: Create Lightweight Partner Invite */}

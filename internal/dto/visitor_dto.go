@@ -25,6 +25,8 @@ type VisitorResponse struct {
 	OutputOctets       int64      `json:"output_octets"`
 	VoucherExpiresAt   *time.Time `json:"voucher_expires_at,omitempty"`
 	VoucherStatus      string     `json:"voucher_status,omitempty"`
+	IsBlocked          bool       `json:"is_blocked"`
+	BlockReason        string     `json:"block_reason,omitempty"`
 }
 
 // VisitorListQuery filters the visitor list.
@@ -33,9 +35,35 @@ type VisitorListQuery struct {
 	Status string `form:"status" binding:"omitempty,oneof=PENDING CONNECTED CLOSED STALE"`
 }
 
+// BlockDeviceRequest is sent when blocking a MAC address.
+type BlockDeviceRequest struct {
+	Reason           string  `json:"reason" binding:"max=255"`
+	RouterID         *string `json:"router_id" binding:"omitempty,uuid"`
+	DisconnectActive *bool   `json:"disconnect_active"`
+}
+
+// BlockedDeviceResponse is one row of app.blocked_devices.
+type BlockedDeviceResponse struct {
+	ID         string    `json:"id"`
+	MAC        string    `json:"mac"`
+	RouterID   *string   `json:"router_id,omitempty"`
+	RouterName string    `json:"router_name,omitempty"`
+	Reason     string    `json:"reason"`
+	BlockedBy  string    `json:"blocked_by"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// BlockedDeviceListQuery filters blocked MAC listings.
+type BlockedDeviceListQuery struct {
+	PaginationQuery
+	RouterID string `form:"router_id" binding:"omitempty,uuid"`
+}
+
 // SessionResponse is one RADIUS accounting session.
 type SessionResponse struct {
 	ID                 string     `json:"id"`
+	RouterID           *string    `json:"router_id,omitempty"`
+	RouterName         string     `json:"router_name,omitempty"`
 	NASIdentifier      string     `json:"nas_identifier"`
 	AcctSessionID      string     `json:"acct_session_id"`
 	Username           string     `json:"username"`
@@ -55,7 +83,17 @@ type SessionResponse struct {
 // SessionListQuery filters the accounting session list.
 type SessionListQuery struct {
 	PaginationQuery
-	Status string `form:"status" binding:"omitempty,oneof=ACTIVE CLOSED STALE"`
+	Status   string `form:"status" binding:"omitempty,oneof=ACTIVE CLOSED STALE"`
+	RouterID string `form:"router_id" binding:"omitempty,uuid"`
+}
+
+// DisconnectSessionResponse describes the outcome of an admin session disconnect (CoA / fallback).
+type DisconnectSessionResponse struct {
+	SessionID      string `json:"session_id"`
+	Status         string `json:"status"`
+	CoASent        bool   `json:"coa_sent"`
+	VoucherRevoked bool   `json:"voucher_revoked"`
+	Message        string `json:"message"`
 }
 
 // ChartPoint represents one time-series point on the dashboard area chart.

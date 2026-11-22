@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"wifiads/internal/dto"
+	"wifiads/internal/middleware"
 	"wifiads/internal/service"
 	"wifiads/pkg/httpx"
 )
@@ -64,4 +65,19 @@ func (h *ProfileHandler) Update(c *gin.Context) {
 		return
 	}
 	httpx.OK(c, "Profile updated", item)
+}
+
+// Delete removes a QoS connect profile when no active router references it.
+func (h *ProfileHandler) Delete(c *gin.Context) {
+	err := h.profiles.Delete(
+		c.Request.Context(),
+		middleware.AdminID(c),
+		middleware.AdminUsername(c),
+		c.Param("id"),
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Profil paket berhasil dihapus", nil)
 }

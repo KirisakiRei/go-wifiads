@@ -30,7 +30,30 @@
   var surveySubmitBtn = document.getElementById("survey-submit-button");
   var surveySkipBtn = document.getElementById("survey-skip-button");
   var surveyStatus = document.getElementById("survey-status");
+  var surveyTiers = document.getElementById("survey-tiers");
+  var tierSurveyVal = document.getElementById("tier-survey-val");
+  var tierSurveyDesc = document.getElementById("tier-survey-desc");
+  var tierDefaultVal = document.getElementById("tier-default-val");
+  var tierDefaultDesc = document.getElementById("tier-default-desc");
+  var edgeProgressFill = document.getElementById("ad-edge-progress-fill");
+  var muteBtn = document.getElementById("ad-mute-btn");
+  var muteLabel = document.getElementById("ad-mute-label");
+  var openVoucherBtn = document.getElementById("open-voucher-btn");
+  var voucherModal = document.getElementById("voucher-modal");
+  var voucherBackdrop = document.getElementById("voucher-modal-backdrop");
+  var closeVoucherBtn = document.getElementById("close-voucher-btn");
+  var voucherCodeInput = document.getElementById("voucher-code");
+  var voucherPassInput = document.getElementById("voucher-password");
+  var voucherSubmitBtn = document.getElementById("voucher-submit-btn");
+  var voucherStatus = document.getElementById("voucher-status");
+  var livePanel = document.getElementById("live-session-panel");
+  var liveStatus = document.getElementById("live-status");
+  var refreshSessionBtn = document.getElementById("refresh-session-btn");
+  var disconnectSessionBtn = document.getElementById("disconnect-session-btn");
+  var redirectHintWrap = document.getElementById("redirect-hint-wrap");
   var form = document.getElementById("hotspot-form");
+  var videoStallTimer = null;
+  var videoCnaFallbackTimer = null;
 
   var sessionToken = null;
   var sessionReady = false;
@@ -92,6 +115,20 @@
     el.hidden = !message;
   }
 
+  function getJSON(url) {
+    return fetch(url, {
+      method: "GET",
+      headers: { "Accept": "application/json" }
+    }).then(function (response) {
+      return response.json().then(function (payload) {
+        if (!response.ok) {
+          var message = (payload && payload.message) || "Request gagal";
+          throw new Error(message);
+        }
+        return payload.data;
+      });
+    });
+  }
   function postJSON(url, body) {
     return fetch(url, {
       method: "POST",
@@ -114,10 +151,13 @@
     countdownInlineEls.forEach(function (el) { el.textContent = String(secondsLeft); });
     if (adDuration > 0) {
       var elapsed = adDuration - secondsLeft;
-      var ratio = elapsed / adDuration;
+      var ratio = Math.min(1, Math.max(0, elapsed / adDuration));
       rings.forEach(function (r) {
         r.style.strokeDashoffset = String(RING_LEN * ratio);
       });
+      if (edgeProgressFill) {
+        edgeProgressFill.style.width = String(Math.round(ratio * 100)) + "%";
+      }
     }
   }
 
@@ -251,10 +291,17 @@
     var img = document.getElementById("ad-image");
     var labelEl = document.getElementById("ad-timer-label-text");
     var started = false;
-
+    window.clearTimeout(videoStallTimer);
+    window.clearTimeout(videoCnaFallbackTimer);
+    if (edgeProgressFill) edgeProgressFill.style.width = "0%";
+    function clearVideoTimers() {
+      window.clearTimeout(videoStallTimer);
+      window.clearTimeout(videoCnaFallbackTimer);
+    }
     function beginTimerOnce() {
       if (started) return;
       started = true;
+      clearVideoTimers();
       if (labelEl) {
         labelEl.innerHTML = 'Sisa <strong id="countdown">' + adDuration + '</strong> dtk';
         countdownEls = [
@@ -265,17 +312,27 @@
       applyAdLayout();
       startCountdown();
     }
-
     if (vid) {
       if (labelEl) labelEl.textContent = "Memuat iklan...";
       countdownEls.forEach(function (el) { el.textContent = "…"; });
-
+      var scheduleStallFallback = function () {
+        if (started) return;
+        window.clearTimeout(videoStallTimer);
+        videoStallTimer = window.setTimeout(beginTimerOnce, 5000);
+      };
       var onReady = function () {
         vid.removeEventListener("playing", onReady);
         vid.removeEventListener("canplay", onReady);
+        vid.removeEventListener("waiting", scheduleStallFallback);
+        vid.removeEventListener("stalled", scheduleStallFallback);
         beginTimerOnce();
       };
-
+      // CNA fallback: if mobile captive webview never fires playing/canplay/ended,
+      // start the countdown anyway after max(adDuration, 10) seconds so user is never stuck.
+      var cnaDelayMs = Math.max(adDuration, 10) * 1000;
+      videoCnaFallbackTimer = window.setTimeout(beginTimerOnce, cnaDelayMs);
+      vid.addEventListener("waiting", scheduleStallFallback);
+      vid.addEventListener("stalled", scheduleStallFallback);
       if (vid.readyState >= 3) {
         var p = vid.play();
         if (p && typeof p.then === "function") {
@@ -287,10 +344,11 @@
         vid.addEventListener("playing", onReady);
         vid.addEventListener("canplay", onReady);
         vid.addEventListener("error", beginTimerOnce, { once: true });
+        scheduleStallFallback();
         var playPromise = vid.play();
         if (playPromise && typeof playPromise.catch === "function") {
           playPromise.catch(function () {
-            // Autoplay fallback
+            scheduleStallFallback();
           });
         }
       }
@@ -381,6 +439,19 @@
 
   var lastPromoUrl = "";
 
+  var settings = (cfg && cfg.settings) || {};
+  var adMetricsSent = false;
+  function sendAdMetrics(completed, watchSec) {
+    if (adMetricsSent || !sessionToken || sessionToken === "auto-resume") return;
+    adMetricsSent = true;
+    try {
+      postJSON("/api/v1/portal-sessions/" + encodeURIComponent(sessionToken) + "/ad-metrics", {
+        completed: !!completed,
+        watch_seconds: Math.max(0, Math.round(Number(watchSec || 0)))
+      }).catch(function () { /* fire-and-forget telemetry */ });
+    } catch (e) { /* ignore */ }
+  }
+
   // ---------- Redirect countdown (connected -> Promo or Google) ----------
   function redirectTarget() {
     if (lastPromoUrl) {
@@ -388,14 +459,16 @@
         return new URL(lastPromoUrl, window.location.origin).toString();
       } catch (e) { /* fallback */ }
     }
-    // MikroTik ngasih link-orig = halaman yang user mau buka sebelum kena portal.
-    // Kalau ada, pakai itu; kalau enggak, fallback ke Google.
     var target = (cfg.linkOrig || "").trim ? (cfg.linkOrig || "").trim() : (cfg.linkOrig || "");
     if (target) {
       try {
         var parsed = new URL(target, window.location.href);
         if (parsed.protocol === "http:" || parsed.protocol === "https:") return parsed.toString();
       } catch (e) { /* abaikan, pakai fallback */ }
+    }
+    var defaultUrl = settings["portal.default_redirect_url"];
+    if (defaultUrl && /^https?:\/\//i.test(defaultUrl)) {
+      return defaultUrl;
     }
     return "https://www.google.com";
   }
@@ -452,7 +525,66 @@
     return downKbps + " Kbps";
   }
 
+  function formatBytes(bytes) {
+    bytes = Number(bytes || 0);
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+  }
+  function formatClockDuration(seconds) {
+    seconds = Math.max(0, Math.floor(Number(seconds || 0)));
+    var h = Math.floor(seconds / 3600);
+    var m = Math.floor((seconds % 3600) / 60);
+    var s = seconds % 60;
+    if (h > 0) return h + " jam " + m + " mnt";
+    if (m > 0) return m + " mnt " + s + " dtk";
+    return s + " dtk";
+  }
+  function paintSurveyTiers(data) {
+    if (!surveyTiers || !data) return;
+    var defP = data.default_profile;
+    var survP = data.survey_profile;
+    if (!defP && !survP) {
+      surveyTiers.hidden = true;
+      return;
+    }
+    if (survP && tierSurveyVal && tierSurveyDesc) {
+      tierSurveyVal.textContent = formatSpeed(survP.bandwidth_down_kbps);
+      tierSurveyDesc.textContent = formatDuration(survP.session_timeout_seconds) + " · " + (survP.display_name || "Akses Cepat");
+    }
+    if (defP && tierDefaultVal && tierDefaultDesc) {
+      tierDefaultVal.textContent = formatSpeed(defP.bandwidth_down_kbps);
+      tierDefaultDesc.textContent = formatDuration(defP.session_timeout_seconds) + " · " + (defP.display_name || "Standar");
+    }
+    surveyTiers.hidden = false;
+  }
+  function showLiveActiveSession(info) {
+    showScreen("connected");
+    stopRedirectCountdown();
+    if (livePanel) livePanel.hidden = false;
+    if (redirectHintWrap) redirectHintWrap.hidden = true;
+    var link = document.getElementById("redirect-now");
+    if (link) {
+      link.textContent = "Mulai Browsing";
+      link.href = redirectTarget();
+    }
+    var setText = function (id, val) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+    setText("connected-title", "Wi-Fi Sedang Aktif");
+    setText("connected-subtitle", "Perangkat Anda sudah terhubung ke internet.");
+    setText("live-profile", info.profile_display || formatSpeed(info.bandwidth_down_kbps));
+    setText("live-remaining", info.remaining_seconds > 0 ? formatClockDuration(info.remaining_seconds) : "Aktif");
+    setText("live-traffic", formatBytes((info.input_octets || 0) + (info.output_octets || 0)));
+    setText("live-uptime", formatClockDuration(info.uptime_seconds || 0));
+    setText("live-username", info.username || "—");
+    setText("live-router", info.router_name || cfg.nasIdentifier || "Hotspot");
+  }
   function showConnected(data) {
+    if (livePanel) livePanel.hidden = true;
+    if (redirectHintWrap) redirectHintWrap.hidden = false;
     lastPromoUrl = (data && data.promo_url) ? data.promo_url : "";
     var link = document.getElementById("redirect-now");
     if (link) {
@@ -488,6 +620,11 @@
 
   // ---------- Survey & Connect flow ----------
   function enterSurveyScreen() {
+    sendAdMetrics(true, adDuration);
+    if (settings["portal.enable_survey"] === "false") {
+      submitSurveyAndConnect(true);
+      return;
+    }
     showScreen("survey");
     setNotice(surveyStatus, "", "");
   }
@@ -502,6 +639,10 @@
     }
     if (surveyEmail) surveyEmail.disabled = busy;
     if (surveyPhone) surveyPhone.disabled = busy;
+    var dynInputs = document.querySelectorAll("[data-qkey]");
+    for (var i = 0; i < dynInputs.length; i++) {
+      dynInputs[i].disabled = busy;
+    }
     if (message) {
       setNotice(surveyStatus, message, "");
     }
@@ -514,8 +655,32 @@
     }
     var email = (surveyEmail && surveyEmail.value ? surveyEmail.value.trim() : "");
     var phone = (surveyPhone && surveyPhone.value ? surveyPhone.value.trim() : "");
+    var answers = {};
+    var dynInputs = document.querySelectorAll("[data-qkey]");
+    var hasDyn = dynInputs.length > 0;
+    var filledCount = 0;
 
-    if (!skipped && !email && !phone) {
+    if (hasDyn && !skipped) {
+      for (var i = 0; i < dynInputs.length; i++) {
+        var el = dynInputs[i];
+        var k = el.getAttribute("data-qkey");
+        var v = (el.value || "").trim();
+        var req = el.getAttribute("data-qreq") === "1";
+        if (req && !v) {
+          setNotice(surveyStatus, "Mohon lengkapi semua kolom bertanda (*), atau pilih tombol Lewati.", "error");
+          el.focus();
+          return;
+        }
+        if (v) {
+          answers[k] = v;
+          filledCount++;
+        }
+      }
+      if (filledCount === 0) {
+        setNotice(surveyStatus, "Silakan isi minimal satu data di atas, atau pilih tombol Lewati.", "error");
+        return;
+      }
+    } else if (!hasDyn && !skipped && !email && !phone) {
       setNotice(surveyStatus, "Silakan isi Email atau Nomor WhatsApp, atau pilih tombol Lewati di bawah.", "error");
       return;
     }
@@ -525,6 +690,7 @@
     postJSON("/api/v1/portal-sessions/" + encodeURIComponent(sessionToken) + "/survey", {
       email: email,
       phone: phone,
+      answers: answers,
       skipped: !!skipped
     })
       .then(function () {
@@ -589,6 +755,7 @@
         sessionReady = true;
         sessionFailed = false;
         adDuration = Number(data.ad_duration_seconds || adDuration);
+        paintSurveyTiers(data);
         if (startButton && startRequested) {
           startButton.disabled = false;
           startButton.textContent = "Hubungkan Sekarang";
@@ -642,8 +809,136 @@
       submitSurveyAndConnect(true);
     });
   }
-
+  if (muteBtn) {
+    muteBtn.addEventListener("click", function () {
+      var vid = document.getElementById("ad-video");
+      if (!vid) return;
+      vid.muted = !vid.muted;
+      if (muteLabel) muteLabel.textContent = vid.muted ? "Suara Mati" : "Suara Aktif";
+      muteBtn.setAttribute("aria-label", vid.muted ? "Nyalakan suara video" : "Matikan suara video");
+    });
+  }
+  function toggleVoucherModal(open) {
+    if (!voucherModal) return;
+    voucherModal.hidden = !open;
+    if (open) {
+      setNotice(voucherStatus, "", "");
+      if (voucherCodeInput) voucherCodeInput.focus();
+    }
+  }
+  if (openVoucherBtn) {
+    openVoucherBtn.addEventListener("click", function () { toggleVoucherModal(true); });
+  }
+  if (closeVoucherBtn) {
+    closeVoucherBtn.addEventListener("click", function () { toggleVoucherModal(false); });
+  }
+  if (voucherBackdrop) {
+    voucherBackdrop.addEventListener("click", function () { toggleVoucherModal(false); });
+  }
+  if (voucherSubmitBtn) {
+    voucherSubmitBtn.addEventListener("click", function () {
+      if (!sessionToken) {
+        setNotice(voucherStatus, "Sesi portal sedang disiapkan, tunggu sebentar lalu coba lagi.", "error");
+        return;
+      }
+      var code = voucherCodeInput ? voucherCodeInput.value.trim() : "";
+      var pass = voucherPassInput ? voucherPassInput.value.trim() : "";
+      if (!code) {
+        setNotice(voucherStatus, "Masukkan kode atau username voucher terlebih dahulu.", "error");
+        return;
+      }
+      voucherSubmitBtn.disabled = true;
+      voucherSubmitBtn.textContent = "Memeriksa voucher...";
+      setNotice(voucherStatus, "", "");
+      postJSON("/api/v1/portal-sessions/" + encodeURIComponent(sessionToken) + "/redeem", {
+        code: code,
+        username: code,
+        password: pass
+      })
+        .then(function (data) {
+          toggleVoucherModal(false);
+          lastConnectHadHotspot = !!(data && data.link_login_only);
+          showConnected(data);
+          if (data && data.link_login_only) {
+            window.setTimeout(function () { submitToHotspot(data); }, 800);
+          }
+        })
+        .catch(function (err) {
+          setNotice(voucherStatus, err.message || "Voucher tidak valid.", "error");
+        })
+        .finally(function () {
+          voucherSubmitBtn.disabled = false;
+          voucherSubmitBtn.textContent = "Gunakan Voucher";
+        });
+    });
+  }
+  function fetchActiveSession(onNotActive) {
+    if (!cfg.mac) {
+      if (onNotActive) onNotActive();
+      return;
+    }
+    var qs = "?mac=" + encodeURIComponent(cfg.mac);
+    if (cfg.nasIdentifier) qs += "&nasid=" + encodeURIComponent(cfg.nasIdentifier);
+    getJSON("/api/v1/portal-sessions/active" + qs)
+      .then(function (data) {
+        if (data && data.active) {
+          showLiveActiveSession(data);
+          setNotice(liveStatus, "", "");
+        } else if (onNotActive) {
+          onNotActive();
+        }
+      })
+      .catch(function () {
+        if (onNotActive) onNotActive();
+      });
+  }
+  if (refreshSessionBtn) {
+    refreshSessionBtn.addEventListener("click", function () {
+      refreshSessionBtn.disabled = true;
+      refreshSessionBtn.textContent = "Memuat...";
+      fetchActiveSession(function () {
+        showScreen("welcome");
+        createSession();
+      });
+      window.setTimeout(function () {
+        refreshSessionBtn.disabled = false;
+        refreshSessionBtn.textContent = "Segarkan Status";
+      }, 600);
+    });
+  }
+  if (disconnectSessionBtn) {
+    disconnectSessionBtn.addEventListener("click", function () {
+      disconnectSessionBtn.disabled = true;
+      disconnectSessionBtn.textContent = "Memutus...";
+      postJSON("/api/v1/portal-sessions/disconnect", {
+        mac: cfg.mac || "",
+        nas_identifier: cfg.nasIdentifier || "",
+        link_logout: cfg.linkLogout || ""
+      })
+        .then(function (res) {
+          if (res && !res.coa_sent && res.logout_url) {
+            window.location.href = res.logout_url;
+            return;
+          }
+          setNotice(liveStatus, (res && res.message) || "Koneksi berhasil diputuskan.", "");
+          window.setTimeout(function () {
+            showScreen("welcome");
+            createSession();
+          }, 1200);
+        })
+        .catch(function (err) {
+          setNotice(liveStatus, err.message || "Gagal memutus koneksi.", "error");
+        })
+        .finally(function () {
+          disconnectSessionBtn.disabled = false;
+          disconnectSessionBtn.textContent = "Putuskan Koneksi";
+        });
+    });
+  }
   applyAdLayout();
   watchAdImage();
-  createSession();
+  // Auto-detect active RADIUS session first; if none (or fails), fall back to normal welcome flow.
+  fetchActiveSession(function () {
+    createSession();
+  });
 })();

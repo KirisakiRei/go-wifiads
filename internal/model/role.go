@@ -18,10 +18,14 @@ func (Role) TableName() string {
 var AllPermissionKeys = []string{
 	"dashboard:view",
 	"routers:view", "routers:create", "routers:edit", "routers:delete",
+	"sessions:view", "sessions:disconnect",
 	"profiles:view", "profiles:create", "profiles:edit", "profiles:delete",
 	"advertisements:view", "advertisements:create", "advertisements:edit", "advertisements:delete",
 	"vouchers:view", "vouchers:create", "vouchers:edit", "vouchers:delete",
-	"visitors:view", "visitors:delete",
+	"visitors:view", "visitors:block", "visitors:delete",
+	"questionnaire:manage",
+	"logs:view",
+	"settings:manage",
 	"users:view", "users:create", "users:edit", "users:delete",
 	"roles:view", "roles:create", "roles:edit", "roles:delete",
 }

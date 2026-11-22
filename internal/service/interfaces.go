@@ -10,16 +10,27 @@ import (
 // AuthService authenticates admin accounts.
 type AuthService interface {
 	Login(ctx context.Context, req dto.LoginRequest) (*dto.LoginResponse, error)
+	IssueRefreshToken(ctx context.Context, adminID string) (string, error)
+	Refresh(ctx context.Context, refreshToken string) (*dto.LoginResponse, string, error)
 	Profile(ctx context.Context, adminID string) (*dto.AdminResponse, error)
 }
 
 // VoucherService owns manual voucher management.
 type VoucherService interface {
 	CreateManual(ctx context.Context, actorID, actorName string, req dto.CreateVoucherRequest) (*dto.VoucherCreatedResponse, error)
+	CreateBatch(ctx context.Context, actorID, actorName string, req dto.CreateVoucherBatchRequest) (*dto.VoucherBatchCreatedResponse, error)
+	ListBatches(ctx context.Context, query dto.VoucherBatchListQuery) ([]dto.VoucherBatchResponse, dto.PaginationMeta, error)
+	Revoke(ctx context.Context, actorID, actorName, voucherID string) (*dto.VoucherResponse, error)
+	Summary(ctx context.Context) (*dto.VoucherSummaryResponse, error)
 	List(ctx context.Context, query dto.VoucherListQuery) ([]dto.VoucherResponse, dto.PaginationMeta, error)
 }
 
 // PortalService owns the visitor portal lifecycle.
+// CoADisconnectFunc sends a RADIUS Disconnect-Request (RFC 5176) to a NAS.
+// Injected from the router layer so services stay decoupled from the RADIUS transport.
+type CoADisconnectFunc func(ctx context.Context, nasAddr, secret, acctSessionID, username, framedIP, callingStationID string) error
+
+// PortalService drives the guest captive portal flow.
 type PortalService interface {
 	CurrentAdvertisement(ctx context.Context) (*model.Advertisement, error)
 	SelectAdvertisementForRouter(ctx context.Context, nasIdentifier string) (*model.Advertisement, error)
@@ -27,6 +38,9 @@ type PortalService interface {
 	SessionStatus(ctx context.Context, token string) (*dto.PortalSessionStatusResponse, error)
 	SubmitSurvey(ctx context.Context, token string, req dto.SubmitSurveyRequest) (*dto.SubmitSurveyResponse, error)
 	Connect(ctx context.Context, token string) (*dto.ConnectResponse, error)
+	RedeemVoucher(ctx context.Context, token string, req dto.RedeemVoucherRequest) (*dto.ConnectResponse, error)
+	GetActiveSession(ctx context.Context, mac, nasIdentifier string) (*dto.ActivePortalSessionResponse, error)
+	DisconnectActiveSession(ctx context.Context, req dto.PortalDisconnectRequest) (*dto.PortalDisconnectResponse, error)
 	RecordPromoClick(ctx context.Context, token string) (string, error)
 }
 
@@ -35,9 +49,17 @@ type AdminService interface {
 	Overview(ctx context.Context) (*dto.OverviewResponse, error)
 	ListVisitors(ctx context.Context, query dto.VisitorListQuery) ([]dto.VisitorResponse, dto.PaginationMeta, error)
 	ListSessions(ctx context.Context, query dto.SessionListQuery) ([]dto.SessionResponse, dto.PaginationMeta, error)
+	DisconnectSession(ctx context.Context, actorID, actorName, sessionID string) (*dto.DisconnectSessionResponse, error)
 	ListRouters(ctx context.Context) ([]dto.RouterResponse, error)
 	CreateRouter(ctx context.Context, actorID, actorName string, req dto.CreateRouterRequest) (*dto.RouterResponse, error)
 	UpdateRouterVoucherConfig(ctx context.Context, actorID, actorName, routerID string, req dto.UpdateRouterVoucherConfigRequest) (*dto.RouterResponse, error)
+	DeleteRouter(ctx context.Context, actorID, actorName, routerID string) error
+	BlockDevice(ctx context.Context, actorID, actorName, mac string, req dto.BlockDeviceRequest) (*dto.BlockedDeviceResponse, error)
+	UnblockDevice(ctx context.Context, actorID, actorName, mac, routerID string) error
+	ListBlockedDevices(ctx context.Context, query dto.BlockedDeviceListQuery) ([]dto.BlockedDeviceResponse, dto.PaginationMeta, error)
+	ListAuditLogs(ctx context.Context, query dto.AuditLogListQuery) ([]dto.AuditLogResponse, dto.PaginationMeta, error)
+	AuditLogFilters(ctx context.Context) (*dto.AuditLogFiltersResponse, error)
+	CleanupAuditLogs(ctx context.Context, actorID, actorName, actorRole string, days int) (*dto.AuditCleanupResponse, error)
 }
 
 // ProfileService manages QoS bandwidth tier profiles.
@@ -46,6 +68,7 @@ type ProfileService interface {
 	Get(ctx context.Context, id string) (*dto.ConnectProfileResponse, error)
 	Create(ctx context.Context, req dto.CreateProfileRequest) (*dto.ConnectProfileResponse, error)
 	Update(ctx context.Context, id string, req dto.UpdateProfileRequest) (*dto.ConnectProfileResponse, error)
+	Delete(ctx context.Context, actorID, actorName, id string) error
 }
 
 // UserService manages admin user accounts and RBAC roles.
@@ -96,6 +119,8 @@ type RadiusAuthResult struct {
 	SessionTimeoutSeconds int
 	BandwidthUpKbps       int
 	BandwidthDownKbps     int
+	QuotaBytes            int64
+	SharedUsers           int
 }
 
 // RadiusAuthenticator validates Hotspot vouchers for the RADIUS server.

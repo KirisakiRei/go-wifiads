@@ -219,3 +219,36 @@ func (r *voucherRepository) UpdatePortalSessionID(ctx context.Context, voucherID
 		Where("id = ?", voucherID).
 		Update("portal_session_id", portalSessionID).Error
 }
+
+func (r *voucherRepository) CreateBatch(ctx context.Context, batch *model.VoucherBatch, vouchers []model.Voucher) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(batch).Error; err != nil {
+			return err
+		}
+		if len(vouchers) > 0 {
+			if err := tx.CreateInBatches(vouchers, 100).Error; err != nil {
+				if isUniqueViolation(err) {
+					return apperror.ErrAlreadyExists
+				}
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (r *voucherRepository) ListBatches(ctx context.Context, page, perPage int, routerID string) ([]model.VoucherBatch, int64, error) {
+	q := r.db.WithContext(ctx).Model(&model.VoucherBatch{})
+	if routerID != "" {
+		q = q.Where("router_id = ?", routerID)
+	}
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var rows []model.VoucherBatch
+	if err := q.Order("created_at DESC").Limit(perPage).Offset((page - 1) * perPage).Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}

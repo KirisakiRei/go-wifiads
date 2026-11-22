@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"wifiads/internal/dto"
 	"wifiads/internal/model"
 	"wifiads/internal/repository"
 	"wifiads/internal/service"
@@ -192,6 +193,16 @@ func (v *fakeVoucherRepo) UpdatePortalSessionID(ctx context.Context, voucherID, 
 	}
 	return nil
 }
+func (v *fakeVoucherRepo) CreateBatch(ctx context.Context, batch *model.VoucherBatch, vouchers []model.Voucher) error {
+	for i := range vouchers {
+		cp := vouchers[i]
+		v.fake.vouchers[cp.ID] = &cp
+	}
+	return nil
+}
+func (v *fakeVoucherRepo) ListBatches(ctx context.Context, page, perPage int, routerID string) ([]model.VoucherBatch, int64, error) {
+	return nil, 0, nil
+}
 
 type fakeVisitorRepo struct{}
 
@@ -249,6 +260,18 @@ func (f *fakeRouterRepo) UpdateVoucherConfig(ctx context.Context, id string, pre
 	f.router.SessionTimeoutSeconds = sessionTimeoutSeconds
 	return nil
 }
+func (f *fakeRouterRepo) TouchLastSeen(ctx context.Context, id string, at time.Time) error {
+	f.router.LastSeenAt = &at
+	return nil
+}
+func (f *fakeRouterRepo) TouchLastSeenByNAS(ctx context.Context, nasIdentifier string, at time.Time) error {
+	f.router.LastSeenAt = &at
+	return nil
+}
+func (f *fakeRouterRepo) SoftDelete(ctx context.Context, id string) error { return nil }
+func (f *fakeRouterRepo) CountActiveCampaigns(ctx context.Context, routerID string) (int64, error) {
+	return 0, nil
+}
 
 type fakeSiteRepo struct{ site model.Site }
 
@@ -269,6 +292,9 @@ func (f *fakeAdRepo) FindByID(ctx context.Context, id string) (*model.Advertisem
 }
 func (f *fakeAdRepo) FindActive(ctx context.Context) (*model.Advertisement, error) {
 	return nil, apperror.ErrNotFound
+}
+func (f *fakeAdRepo) RecordWatchMetrics(ctx context.Context, adID string, completed bool, watchSeconds int) error {
+	return nil
 }
 func (f *fakeAdRepo) List(ctx context.Context) ([]model.Advertisement, error) {
 	return nil, nil
@@ -306,6 +332,9 @@ func (f *fakeConnectProfileRepo) Update(ctx context.Context, p *model.ConnectPro
 }
 func (f *fakeConnectProfileRepo) Delete(ctx context.Context, id string) error { return nil }
 func (f *fakeConnectProfileRepo) Count(ctx context.Context) (int64, error)    { return 0, nil }
+func (f *fakeConnectProfileRepo) CountRoutersUsingProfile(ctx context.Context, profileID string) (int64, error) {
+	return 0, nil
+}
 
 func TestConnectEnforcesTimerAndIdempotency(t *testing.T) {
 	fake := newFakePortalRepo()
@@ -548,5 +577,90 @@ func TestConnectSmartReuseAndRouterConfig(t *testing.T) {
 				t.Fatalf("expected old voucher to be marked EXPIRED, got %s", v.Status)
 			}
 		}
+	}
+}
+
+func TestRedeemVoucherManualAndGuard(t *testing.T) {
+	ctx := context.Background()
+	fake := newFakePortalRepo()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	key := utils.DeriveDevKey("test-voucher-key")
+	router := model.Router{Base: model.Base{ID: "r1"}, SiteID: "s1", Name: "r-test"}
+
+	svc := service.NewPortalService(
+		fake,
+		&fakeVoucherRepo{fake: fake},
+		&fakeVisitorRepo{},
+		&fakeConnectProfileRepo{},
+		&fakeRouterRepo{router: router},
+		&fakeSiteRepo{site: model.Site{Base: model.Base{ID: "s1"}, Name: "s-test"}},
+		&fakeAdRepo{},
+		logger,
+		service.PortalServiceOptions{
+			VoucherKey:            key,
+			AdDuration:            10 * time.Second,
+			SessionTTL:            15 * time.Minute,
+			VoucherTTL:            time.Hour,
+			DefaultSessionTimeout: 3600,
+			DevMode:               true,
+		},
+	)
+
+	now := time.Now().UTC()
+	rawToken := "redeem-session-token-1234567890"
+	_ = fake.Create(ctx, &model.PortalSession{
+		Base:          model.Base{ID: "sess-redeem", CreatedAt: now, UpdatedAt: now},
+		TokenHash:     utils.HashToken(rawToken),
+		SiteID:        "s1",
+		RouterID:      "r1",
+		DeviceMAC:     "AA:BB:CC:DD:EE:01",
+		Status:        model.PortalSessionStatusPendingAd,
+		AdStartedAt:   now, // Timer NOT finished — redeem must still work without watching ad
+		ExpiresAt:     now.Add(15 * time.Minute),
+		LinkLoginOnly: "http://10.0.0.1/login",
+	})
+
+	encVIP, _ := utils.EncryptString(key, "vippass")
+	fake.vouchers["v-vip"] = &model.Voucher{
+		Base:                  model.Base{ID: "v-vip"},
+		Username:              "VIP001",
+		PasswordCiphertext:    encVIP,
+		Status:                model.VoucherStatusIssued,
+		SiteID:                "s1",
+		RouterID:              "r1",
+		CreatedBy:             "admin",
+		ExpiresAt:             now.Add(time.Hour),
+		SessionTimeoutSeconds: 7200,
+	}
+
+	encAuto, _ := utils.EncryptString(key, "autopass")
+	fake.vouchers["v-auto"] = &model.Voucher{
+		Base:               model.Base{ID: "v-auto"},
+		Username:           "wf9999",
+		PasswordCiphertext: encAuto,
+		Status:             model.VoucherStatusIssued,
+		SiteID:             "s1",
+		RouterID:           "r1",
+		CreatedBy:          "portal",
+		ExpiresAt:          now.Add(time.Hour),
+	}
+
+	// Portal-generated voucher cannot be redeemed without password
+	if _, err := svc.RedeemVoucher(ctx, rawToken, dto.RedeemVoucherRequest{Code: "wf9999"}); err == nil {
+		t.Fatalf("expected error redeeming portal-generated voucher without password")
+	}
+
+	// Wrong password must fail
+	if _, err := svc.RedeemVoucher(ctx, rawToken, dto.RedeemVoucherRequest{Username: "VIP001", Password: "wrong"}); err == nil {
+		t.Fatalf("expected error on wrong voucher password")
+	}
+
+	// Admin-issued voucher succeeds immediately with code alone
+	resp, err := svc.RedeemVoucher(ctx, rawToken, dto.RedeemVoucherRequest{Code: "VIP001"})
+	if err != nil {
+		t.Fatalf("expected valid admin voucher redeem to succeed, got: %v", err)
+	}
+	if resp.Username != "VIP001" || resp.Password != "vippass" || resp.SessionTimeoutSeconds != 7200 {
+		t.Fatalf("unexpected connect payload: %+v", resp)
 	}
 }

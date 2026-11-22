@@ -107,6 +107,9 @@ export function RouterDetailPage() {
       }
       setLocationTierAuto(currentRouter.location_tier_auto ?? true)
       setIsPublicMarketplace(currentRouter.is_public_marketplace ?? true)
+      if (currentRouter.radius_server_ip) {
+        setRadiusServerIp(currentRouter.radius_server_ip)
+      }
       if (currentRouter.portal_base_url) {
         setPortalBaseUrl(currentRouter.portal_base_url.replace(/\/+$/, ''))
       } else if (typeof window !== 'undefined') {
@@ -208,14 +211,14 @@ export function RouterDetailPage() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="refresh" content="0; url=${cleanPortalUrl}?mac=$(mac)&ip=$(ip)&nasid=${nasIdentifier.trim()}&link-login-only=$(link-login-only-esc)&link-login=$(link-login-esc)&link-orig=$(link-orig-esc)">
+  <meta http-equiv="refresh" content="0; url=${cleanPortalUrl}?mac=$(mac)&ip=$(ip)&nasid=${nasIdentifier.trim()}&link-login-only=$(link-login-only-esc)&link-login=$(link-login-esc)&link-orig=$(link-orig-esc)&link-logout=$(link-logout-esc)">
   <title>Mengarahkan ke Portal Wi-Fi...</title>
 </head>
 <body style="font-family:sans-serif;background:#f1f5f9;color:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center">
   <div style="background:#fff;padding:28px 24px;border-radius:16px;border:1px solid #e2e8f0;max-width:340px;width:90%">
     <h3 style="margin:0 0 8px">Mengarahkan ke Portal...</h3>
     <p style="font-size:14px;color:#64748b;margin:0 0 18px">Jika tidak berpindah otomatis, ketuk tombol di bawah:</p>
-    <a href="${cleanPortalUrl}?mac=$(mac)&ip=$(ip)&nasid=${nasIdentifier.trim()}&link-login-only=$(link-login-only-esc)&link-login=$(link-login-esc)&link-orig=$(link-orig-esc)" style="display:inline-block;background:#2563eb;color:white;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:14px">Buka Halaman Login</a>
+    <a href="${cleanPortalUrl}?mac=$(mac)&ip=$(ip)&nasid=${nasIdentifier.trim()}&link-login-only=$(link-login-only-esc)&link-login=$(link-login-esc)&link-orig=$(link-orig-esc)&link-logout=$(link-logout-esc)" style="display:inline-block;background:#2563eb;color:white;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:14px">Buka Halaman Login</a>
   </div>
 </body>
 </html>`
@@ -230,7 +233,7 @@ export function RouterDetailPage() {
     const pool = hotspotPoolRange.trim() || '10.10.0.10-10.10.0.250'
     const dns = dnsServers.trim() || '8.8.8.8,1.1.1.1'
 
-    const escapedLoginHtml = `<!DOCTYPE html><html><head><meta charset=\\"utf-8\\"><meta name=\\"viewport\\" content=\\"width=device-width,initial-scale=1\\"><meta http-equiv=\\"refresh\\" content=\\"0; url=${cleanPortalUrl}?mac=\\$(mac)&ip=\\$(ip)&nasid=${nas}&link-login-only=\\$(link-login-only-esc)&link-login=\\$(link-login-esc)&link-orig=\\$(link-orig-esc)\\"><title>Mengarahkan ke Portal Wi-Fi...</title></head><body style=\\"font-family:sans-serif;background:#f1f5f9;color:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center\\"><div style=\\"background:#fff;padding:28px 24px;border-radius:16px;border:1px solid #e2e8f0;max-width:340px;width:90%\\"><h3 style=\\"margin:0 0 8px\\">Mengarahkan ke Portal...</h3><p style=\\"font-size:14px;color:#64748b;margin:0 0 18px\\">Jika tidak berpindah otomatis, ketuk tombol di bawah:</p><a href=\\"${cleanPortalUrl}?mac=\\$(mac)&ip=\\$(ip)&nasid=${nas}&link-login-only=\\$(link-login-only-esc)&link-login=\\$(link-login-esc)&link-orig=\\$(link-orig-esc)\\" style=\\"display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:14px\\">Buka Halaman Login</a></div></body></html>`
+    const escapedLoginHtml = `<!DOCTYPE html><html><head><meta charset=\\"utf-8\\"><meta name=\\"viewport\\" content=\\"width=device-width,initial-scale=1\\"><meta http-equiv=\\"refresh\\" content=\\"0; url=${cleanPortalUrl}?mac=\\$(mac)&ip=\\$(ip)&nasid=${nas}&link-login-only=\\$(link-login-only-esc)&link-login=\\$(link-login-esc)&link-orig=\\$(link-orig-esc)&link-logout=\\$(link-logout-esc)\\"><title>Mengarahkan ke Portal Wi-Fi...</title></head><body style=\\"font-family:sans-serif;background:#f1f5f9;color:#0f172a;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center\\"><div style=\\"background:#fff;padding:28px 24px;border-radius:16px;border:1px solid #e2e8f0;max-width:340px;width:90%\\"><h3 style=\\"margin:0 0 8px\\">Mengarahkan ke Portal...</h3><p style=\\"font-size:14px;color:#64748b;margin:0 0 18px\\">Jika tidak berpindah otomatis, ketuk tombol di bawah:</p><a href=\\"${cleanPortalUrl}?mac=\\$(mac)&ip=\\$(ip)&nasid=${nas}&link-login-only=\\$(link-login-only-esc)&link-login=\\$(link-login-esc)&link-orig=\\$(link-orig-esc)&link-logout=\\$(link-logout-esc)\\" style=\\"display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:14px\\">Buka Halaman Login</a></div></body></html>`
 
     const fullNetworkSection =
       setupMode === 'full'
@@ -291,9 +294,10 @@ ${fullNetworkSection}
 /radius remove [find comment~"wifiads"]
 /radius remove [find address=$radiusServerIp]
 
-# 3. Daftarkan Server RADIUS
+# 3. Daftarkan Server RADIUS & CoA/PoD Incoming
 /radius add service=hotspot address=$radiusServerIp secret=$radiusSecret \\
     authentication-port=1812 accounting-port=1813 timeout=3s comment="wifiads-radius"
+/radius incoming set accept=yes port=3799
 
 # 4. Konfigurasi Hotspot Server Profile
 :local profId [/ip hotspot profile find where name="wifiads-profile"]
@@ -364,15 +368,29 @@ ${fullNetworkSection}
     toast.success(`Berkas wifiads-${nasIdentifier.trim() || 'setup'}.rsc berhasil diunduh`)
   }
 
-  const handleDownloadLoginHtml = () => {
-    const blob = new Blob([loginHtmlContent], { type: 'text/html;charset=utf-8' })
+  const downloadHtmlFile = (filename: string, html: string) => {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'login.html'
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
-    toast.success('Berkas login.html berhasil diunduh')
+    toast.success(`Berkas ${filename} berhasil diunduh`)
+  }
+
+  const handleDownloadLoginHtml = () => downloadHtmlFile('login.html', loginHtmlContent)
+
+  const handleDownloadAloginHtml = () => {
+    const brand = name.trim() || 'WiFiAds'
+    const html = `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="2; url=$(link-redirect)"><title>Terhubung — ${brand}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f1f5f9;color:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px;text-align:center}.card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px 24px;max-width:360px;width:100%}.badge{width:52px;height:52px;border-radius:50%;background:#dcfce7;color:#16a34a;display:inline-flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;margin-bottom:14px}.btn{display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-size:14px;font-weight:600}.sub{display:block;margin-top:12px;font-size:12px;color:#64748b;text-decoration:none}</style></head><body><div class="card"><div class="badge">&#10003;</div><h2 style="margin:0 0 8px;font-size:18px">Internet Sudah Aktif!</h2><p style="margin:0 0 18px;font-size:14px;color:#64748b">Anda terhubung melalui ${brand}. Mengalihkan secara otomatis...</p><a class="btn" href="$(link-redirect)">Lanjut ke Internet</a><a class="sub" href="$(link-status)">Lihat Status Koneksi</a></div></body></html>`
+    downloadHtmlFile('alogin.html', html)
+  }
+
+  const handleDownloadStatusHtml = () => {
+    const brand = name.trim() || 'WiFiAds'
+    const html = `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">$(if refresh-timeout)<meta http-equiv="refresh" content="$(refresh-timeout-secs)">$(endif)<title>Status Wi-Fi — ${brand}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f1f5f9;color:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:16px}.card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;max-width:380px;width:100%}.rows{border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:10px 0;margin:14px 0 18px}.row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px}.label{color:#64748b}.val{font-weight:600}.btn{display:block;width:100%;box-sizing:border-box;text-align:center;padding:11px 16px;border-radius:10px;font-size:14px;font-weight:600;text-decoration:none;border:none;cursor:pointer;margin-top:8px}.btn-p{background:#2563eb;color:#fff}.btn-d{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}</style></head><body><div class="card"><h2 style="margin:0;font-size:18px">Status Wi-Fi — ${brand}</h2><div class="rows"><div class="row"><span class="label">Pengguna</span><span class="val">$(username)</span></div><div class="row"><span class="label">IP Address</span><span class="val">$(ip)</span></div><div class="row"><span class="label">MAC Address</span><span class="val">$(mac)</span></div><div class="row"><span class="label">Durasi</span><span class="val">$(uptime)</span></div>$(if session-time-left)<div class="row"><span class="label">Sisa Waktu</span><span class="val">$(session-time-left)</span></div>$(endif)<div class="row"><span class="label">Unduh / Unggah</span><span class="val">$(bytes-out-nice) / $(bytes-in-nice)</span></div></div><a class="btn btn-p" href="$(link-status)">Muat Ulang Status</a>$(if login-by-mac != 'yes')<form action="$(link-logout)" method="get" style="margin:0"><button type="submit" class="btn btn-d">Putuskan Koneksi</button></form>$(endif)</div></body></html>`
+    downloadHtmlFile('status.html', html)
   }
 
   if (isLoading) {
@@ -970,6 +988,46 @@ ${fullNetworkSection}
                 >
                   <FileCode size={14} />
                   login.html
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadAloginHtml}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    padding: '0.5rem 0.85rem',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#334155',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <FileCode size={14} />
+                  alogin.html
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadStatusHtml}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    padding: '0.5rem 0.85rem',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#334155',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <FileCode size={14} />
+                  status.html
                 </button>
               </div>
             </div>

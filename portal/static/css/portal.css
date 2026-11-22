@@ -754,8 +754,147 @@ body.is-ad .app {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .screen, .btn-primary, .ad-timer-progress {
+  .screen, .btn-primary, .ad-timer-progress, .ad-edge-progress-fill {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ---------- Phase 1: Video HUD Hardening, Voucher Modal & Live Session ---------- */
+.ad-edge-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.16);
+  z-index: 30;
+  overflow: hidden;
+}
+.ad-edge-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: #38bdf8;
+  transition: width 300ms linear;
+}
+.ad-hud-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ad-mute-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(15, 23, 42, 0.65);
+  color: #f8fafc;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-link-subtle {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.btn-link-subtle:hover {
+  color: var(--brand);
+}
+.portal-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.portal-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+}
+.portal-modal-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 390px;
+  text-align: left;
+}
+.portal-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.modal-close-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
+  color: var(--ink-2);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.live-session-panel {
+  margin: 14px 0 16px;
+  text-align: left;
+}
+.live-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.live-stat-item {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.live-stat-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.live-stat-value {
+  font-size: 0.92rem;
+  color: var(--ink);
+  font-weight: 700;
+}
+.live-session-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.btn-danger-outline {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-danger-outline:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

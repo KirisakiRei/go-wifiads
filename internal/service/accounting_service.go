@@ -18,6 +18,7 @@ type accountingService struct {
 	accounts repository.AccountingRepository
 	vouchers repository.VoucherRepository
 	visitors repository.WifiVisitorRepository
+	routers  repository.RouterRepository
 	logger   *slog.Logger
 
 	staleAfter time.Duration
@@ -40,6 +41,13 @@ func NewAccountingService(
 	}
 }
 
+// SetAccountingRouterRepo attaches an optional router repo to refresh last_seen_at on accounting traffic.
+func SetAccountingRouterRepo(acct RadiusAccountant, repo repository.RouterRepository) {
+	if s, ok := acct.(*accountingService); ok {
+		s.routers = repo
+	}
+}
+
 // Process applies one Accounting-Request idempotently.
 func (s *accountingService) Process(ctx context.Context, req RadiusAccountingRequest) error {
 	if req.StatusType == "Accounting-On" || req.StatusType == "Accounting-Off" {
@@ -50,6 +58,14 @@ func (s *accountingService) Process(ctx context.Context, req RadiusAccountingReq
 	}
 
 	now := time.Now().UTC()
+	if s.routers != nil && req.NASIdentifier != "" {
+		nasID := req.NASIdentifier
+		go func() {
+			tctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_ = s.routers.TouchLastSeenByNAS(tctx, nasID, now)
+		}()
+	}
 	voucher, voucherErr := s.vouchers.FindByUsername(ctx, req.Username)
 	if voucherErr != nil && !errors.Is(voucherErr, apperror.ErrNotFound) {
 		return voucherErr

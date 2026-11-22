@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -9,6 +10,7 @@ import {
   Hourglass,
   Image as ImageIcon,
   Router,
+  ScrollText,
   ShieldCheck,
   Smartphone,
   Sparkles,
@@ -18,9 +20,10 @@ import {
 import { ErrorState, LoadingState } from '@/components/feedback/query-state'
 import { KpiCard, KpiGrid, StatusPill, WavyHeader } from '@/components/ui'
 import { useAdvertisements } from '@/features/advertisements/hooks/use-advertisements'
+import { auditLogsApi } from '@/features/audit-logs/audit-logs.api'
 import { useOverview } from '@/features/dashboard/hooks/use-overview'
 import type { ChartPoint } from '@/features/dashboard/types/overview.types'
-import { formatBytes } from '@/lib/formatters'
+import { formatBytes, formatDate } from '@/lib/formatters'
 
 function buildSmoothSvgPath(points: { x: number; y: number }[]): string {
   if (points.length === 0) return ''
@@ -41,6 +44,10 @@ function buildSmoothSvgPath(points: { x: number; y: number }[]): string {
 export function DashboardPage() {
   const { data, isPending, error } = useOverview()
   const { data: adsData } = useAdvertisements()
+  const { data: recentLogs } = useQuery({
+    queryKey: ['dashboard-recent-audit-logs'],
+    queryFn: () => auditLogsApi.list({ page: 1, per_page: 5 }),
+  })
   const [timeRange, setTimeRange] = useState<'today' | '7d' | '30d'>('today')
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
 
@@ -608,6 +615,57 @@ export function DashboardPage() {
                 Keseluruhan voucher yang pernah dibuat di sistem.
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Aktivitas Admin Terbaru Widget */}
+        <div className="stitch-card-container" style={{ marginTop: '1.5rem' }}>
+          <div className="table-toolbar">
+            <div className="table-toolbar-title">
+              <ScrollText size={19} style={{ color: '#1d4ed8' }} />
+              <h3>Aktivitas Admin Terbaru</h3>
+            </div>
+            <Link to="/logs" className="btn btn-secondary" style={{ fontSize: '12px', padding: '0.4rem 0.8rem' }}>
+              Lihat Semua Log
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+          <div style={{ padding: '0.75rem 1.25rem 1.25rem' }}>
+            {recentLogs && recentLogs.data.length > 0 ? (
+              <div style={{ display: 'grid', gap: '0.6rem' }}>
+                {recentLogs.data.map((log) => (
+                  <div
+                    key={log.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      padding: '0.65rem 0.85rem',
+                      background: '#f8fafc',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      fontSize: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                      <StatusPill variant="basic">{log.action}</StatusPill>
+                      <strong style={{ color: '#0f172a' }}>{log.actor_name || 'system'}</strong>
+                      <span style={{ color: '#64748b' }}>
+                        {log.entity_type} {log.detail ? `— ${log.detail.slice(0, 60)}` : ''}
+                      </span>
+                    </div>
+                    <span style={{ color: '#64748b', whiteSpace: 'nowrap', fontSize: '11px' }}>
+                      {formatDate(log.created_at)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+                Belum ada aktivitas admin yang tercatat.
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -38,8 +38,13 @@ func (s *Server) handleAuth(w radius.ResponseWriter, r *radius.Request) {
 
 	response := r.Response(radius.CodeAccessAccept)
 	_ = rfc2865.SessionTimeout_Add(response, rfc2865.SessionTimeout(result.SessionTimeoutSeconds))
-	_ = rfc2865.PortLimit_Add(response, rfc2865.PortLimit(1))
+	portLimit := result.SharedUsers
+	if portLimit <= 0 {
+		portLimit = 1
+	}
+	_ = rfc2865.PortLimit_Add(response, rfc2865.PortLimit(portLimit))
 	addWISPrBandwidth(response, result.BandwidthUpKbps, result.BandwidthDownKbps)
+	addMikroTikQuota(response, result.QuotaBytes)
 
 	s.logger.Info("radius access accepted",
 		slog.String("username", request.Username),

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -15,29 +17,37 @@ import (
 )
 
 type adminService struct {
-	visitors   repository.WifiVisitorRepository
-	vouchers   repository.VoucherRepository
-	accounts   repository.AccountingRepository
-	sessions   repository.PortalSessionRepository
-	profiles   repository.ConnectProfileRepository
-	routers     repository.RouterRepository
-	nasClients  repository.NASClientRepository
-	sites       repository.SiteRepository
-	marketplace repository.MarketplaceRepository
-	partners    repository.PartnerRepository
+	visitors       repository.WifiVisitorRepository
+	vouchers       repository.VoucherRepository
+	accounts       repository.AccountingRepository
+	sessions       repository.PortalSessionRepository
+	profiles       repository.ConnectProfileRepository
+	routers        repository.RouterRepository
+	nasClients     repository.NASClientRepository
+	sites          repository.SiteRepository
+	marketplace    repository.MarketplaceRepository
+	partners       repository.PartnerRepository
+	blockedDevices repository.BlockedDeviceRepository
+	audits         repository.AuditLogRepository
 
 	radiusSecretKey []byte
+	radiusServerIP  string
 	portalBaseURL   string
+	coaDisconnect   CoADisconnectFunc
 }
 
-// AdminServiceOptions holds optional dependencies for router & RADIUS provisioning.
+// AdminServiceOptions holds optional dependencies for router, RADIUS & operations.
 type AdminServiceOptions struct {
 	NASClients      repository.NASClientRepository
 	Sites           repository.SiteRepository
 	Marketplace     repository.MarketplaceRepository
 	Partners        repository.PartnerRepository
+	BlockedDevices  repository.BlockedDeviceRepository
+	Audits          repository.AuditLogRepository
 	RadiusSecretKey []byte
+	RadiusServerIP  string
 	PortalBaseURL   string
+	CoADisconnect   CoADisconnectFunc
 }
 
 // NewAdminService builds the dashboard and router provisioning service.
@@ -63,8 +73,12 @@ func NewAdminService(
 		svc.sites = opts[0].Sites
 		svc.marketplace = opts[0].Marketplace
 		svc.partners = opts[0].Partners
+		svc.blockedDevices = opts[0].BlockedDevices
+		svc.audits = opts[0].Audits
 		svc.radiusSecretKey = opts[0].RadiusSecretKey
+		svc.radiusServerIP = opts[0].RadiusServerIP
 		svc.portalBaseURL = opts[0].PortalBaseURL
+		svc.coaDisconnect = opts[0].CoADisconnect
 	}
 	return svc
 }
@@ -278,6 +292,19 @@ func (s *adminService) ListVisitors(ctx context.Context, query dto.VisitorListQu
 		}
 	}
 
+	macs := make([]string, 0, len(items))
+	for _, v := range items {
+		if v.MAC != "" {
+			macs = append(macs, v.MAC)
+		}
+	}
+	blockedMap := make(map[string]model.BlockedDevice)
+	if len(macs) > 0 && s.blockedDevices != nil {
+		if bm, bErr := s.blockedDevices.FindBlockedMACs(ctx, macs); bErr == nil {
+			blockedMap = bm
+		}
+	}
+
 	responses := make([]dto.VisitorResponse, 0, len(items))
 	for i := range items {
 		visitor := items[i]
@@ -313,6 +340,8 @@ func (s *adminService) ListVisitors(ctx context.Context, query dto.VisitorListQu
 			}
 		}
 
+		blockedEntry, isBlocked := blockedMap[utils.NormalizeMAC(visitor.MAC)]
+
 		responses = append(responses, dto.VisitorResponse{
 			ID:                 visitor.ID,
 			PortalSessionID:    visitor.PortalSessionID,
@@ -335,6 +364,8 @@ func (s *adminService) ListVisitors(ctx context.Context, query dto.VisitorListQu
 			OutputOctets:       traffic.OutputOctets,
 			VoucherExpiresAt:   voucherExpiresAt,
 			VoucherStatus:      voucherStatus,
+			IsBlocked:          isBlocked,
+			BlockReason:        blockedEntry.Reason,
 		})
 	}
 
@@ -351,14 +382,26 @@ func (s *adminService) ListSessions(ctx context.Context, query dto.SessionListQu
 	page, perPage, _ := utils.NormalizePage(query.Page, query.PerPage)
 
 	items, total, err := s.accounts.ListSessions(ctx, repository.SessionFilter{
-		Page:    page,
-		PerPage: perPage,
-		Search:  query.Search,
-		Status:  query.Status,
-		Order:   query.Order,
+		Page:     page,
+		PerPage:  perPage,
+		Search:   query.Search,
+		Status:   query.Status,
+		RouterID: query.RouterID,
+		Order:    query.Order,
 	})
 	if err != nil {
 		return nil, dto.PaginationMeta{}, err
+	}
+
+	routerNameByID := make(map[string]string)
+	routerNameByNAS := make(map[string]string)
+	if s.routers != nil {
+		if rList, rErr := s.routers.ListActive(ctx); rErr == nil {
+			for _, r := range rList {
+				routerNameByID[r.ID] = r.Name
+				routerNameByNAS[strings.ToLower(strings.TrimSpace(r.NASIdentifier))] = r.Name
+			}
+		}
 	}
 
 	responses := make([]dto.SessionResponse, 0, len(items))
@@ -371,8 +414,17 @@ func (s *adminService) ListSessions(ctx context.Context, query dto.SessionListQu
 				sessionSecs = liveSecs
 			}
 		}
+		routerName := ""
+		if session.RouterID != nil {
+			routerName = routerNameByID[*session.RouterID]
+		}
+		if routerName == "" {
+			routerName = routerNameByNAS[strings.ToLower(strings.TrimSpace(session.NASIdentifier))]
+		}
 		responses = append(responses, dto.SessionResponse{
 			ID:                 session.ID,
+			RouterID:           session.RouterID,
+			RouterName:         routerName,
 			NASIdentifier:      session.NASIdentifier,
 			AcctSessionID:      session.AcctSessionID,
 			Username:           session.Username,
@@ -423,45 +475,10 @@ func (s *adminService) ListRouters(ctx context.Context) ([]dto.RouterResponse, e
 		}
 	}
 
-	type routerTelemetry struct {
-		lastSeen       *time.Time
-		activeSessions int64
-		totalSessions  int64
-		inputOctets    int64
-		outputOctets   int64
-	}
-	telemetryByNAS := make(map[string]*routerTelemetry)
+	telemetryByNAS := make(map[string]repository.RouterAccountingStats)
 	if s.accounts != nil {
-		if sessions, _, sErr := s.accounts.ListSessions(ctx, repository.SessionFilter{Page: 1, PerPage: 500, Order: "desc"}); sErr == nil {
-			for i := range sessions {
-				sess := sessions[i]
-				key := strings.ToLower(strings.TrimSpace(sess.NASIdentifier))
-				if key == "" {
-					continue
-				}
-				stat, ok := telemetryByNAS[key]
-				if !ok {
-					stat = &routerTelemetry{}
-					telemetryByNAS[key] = stat
-				}
-				stat.totalSessions++
-				stat.inputOctets += sess.InputOctets
-				stat.outputOctets += sess.OutputOctets
-				if sess.Status == model.AccountingSessionStatusActive {
-					stat.activeSessions++
-				}
-				ts := sess.LastAccountingAt
-				if ts == nil {
-					ts = sess.StartedAt
-				}
-				if ts == nil {
-					t := sess.CreatedAt
-					ts = &t
-				}
-				if stat.lastSeen == nil || ts.After(*stat.lastSeen) {
-					stat.lastSeen = ts
-				}
-			}
+		if agg, aErr := s.accounts.AggregateByNAS(ctx); aErr == nil {
+			telemetryByNAS = agg
 		}
 	}
 
@@ -495,14 +512,19 @@ func (s *adminService) ListRouters(ctx context.Context) ([]dto.RouterResponse, e
 		_, addr, cat, lat, lng, partnerPtr := ResolveRouterPartnerDisplay(&r, partnerMap)
 
 		resp := s.buildRouterResponse(&r, nas, effTierID, effTierName, effMult, avgConn, avgImp, addr, cat, lat, lng, partnerPtr)
-		if stat, ok := telemetryByNAS[strings.ToLower(strings.TrimSpace(r.NASIdentifier))]; ok && stat != nil {
-			resp.IsConnected = stat.lastSeen != nil
-			resp.LastSeenAt = stat.lastSeen
-			resp.ActiveSessionsCount = stat.activeSessions
-			resp.TotalSessionsCount = stat.totalSessions
-			resp.TotalInputOctets = stat.inputOctets
-			resp.TotalOutputOctets = stat.outputOctets
+		lastSeen := r.LastSeenAt
+		if stat, ok := telemetryByNAS[strings.ToLower(strings.TrimSpace(r.NASIdentifier))]; ok {
+			if stat.LastSeenAt != nil && (lastSeen == nil || stat.LastSeenAt.After(*lastSeen)) {
+				lastSeen = stat.LastSeenAt
+			}
+			resp.ActiveSessionsCount = stat.ActiveSessions
+			resp.TotalSessionsCount = stat.TotalSessions
+			resp.TotalInputOctets = stat.InputOctets
+			resp.TotalOutputOctets = stat.OutputOctets
 		}
+		resp.LastSeenAt = lastSeen
+		resp.IsConnected = lastSeen != nil
+		resp.IsOnline = lastSeen != nil && time.Since(*lastSeen) < 5*time.Minute
 		responses = append(responses, resp)
 	}
 	return responses, nil
@@ -584,6 +606,7 @@ func (s *adminService) buildRouterResponse(
 		IPAddress:             r.IPAddress,
 		NASIPAddress:          nasIP,
 		RadiusSecret:          radiusSecret,
+		RadiusServerIP:        s.radiusServerIP,
 		PortalBaseURL:         s.portalBaseURL,
 		Status:                r.Status,
 		Description:           r.Description,
@@ -945,4 +968,355 @@ func (s *adminService) UpdateRouterVoucherConfig(
 	effTierID, effTierName, effMult := ResolveEffectiveRouterTier(updated, tiers, avgConn, avgImp)
 	res := s.buildRouterResponse(updated, nas, effTierID, effTierName, effMult, avgConn, avgImp, updated.LocationAddress, updated.VenueCategory, updated.Latitude, updated.Longitude, linkedPartner)
 	return &res, nil
+}
+
+func (s *adminService) recordAudit(ctx context.Context, actorID, actorName, action, entityType, entityID string, payload map[string]any) {
+	if s.audits == nil {
+		return
+	}
+	raw, _ := json.Marshal(payload)
+	if len(raw) == 0 {
+		raw = []byte("{}")
+	}
+	// Best-effort audit write; operational mutation already succeeded.
+	_ = s.audits.Create(ctx, &model.AuditLog{
+		ID:         uuid.NewString(),
+		ActorID:    strings.TrimSpace(actorID),
+		ActorName:  actorName,
+		Action:     action,
+		EntityType: entityType,
+		EntityID:   entityID,
+		Detail:     string(raw),
+		CreatedAt:  time.Now().UTC(),
+	})
+}
+
+func (s *adminService) DisconnectSession(ctx context.Context, actorID, actorName, sessionID string) (*dto.DisconnectSessionResponse, error) {
+	if s.accounts == nil {
+		return nil, apperror.ErrInternalServer
+	}
+	sess, err := s.accounts.FindByID(ctx, strings.TrimSpace(sessionID))
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	voucherRevoked := false
+	if s.vouchers != nil {
+		if sess.VoucherID != nil && *sess.VoucherID != "" {
+			if vErr := s.vouchers.UpdateStatus(ctx, *sess.VoucherID, model.VoucherStatusRevoked); vErr == nil {
+				voucherRevoked = true
+			}
+		} else if sess.Username != "" {
+			if v, vErr := s.vouchers.FindByUsername(ctx, sess.Username); vErr == nil && v != nil {
+				if uErr := s.vouchers.UpdateStatus(ctx, v.ID, model.VoucherStatusRevoked); uErr == nil {
+					voucherRevoked = true
+				}
+			}
+		}
+	}
+
+	coaSent := false
+	if s.coaDisconnect != nil && s.nasClients != nil && len(s.radiusSecretKey) > 0 {
+		var nas *model.NASClient
+		if sess.RouterID != nil && *sess.RouterID != "" {
+			nas, _ = s.nasClients.FindByRouterID(ctx, *sess.RouterID)
+		}
+		if nas == nil && sess.NASIdentifier != "" {
+			nas, _ = s.nasClients.FindByNASIdentifier(ctx, sess.NASIdentifier)
+		}
+		if nas != nil && strings.TrimSpace(nas.IPAddress) != "" && nas.SecretCiphertext != "" {
+			if secret, decErr := utils.DecryptString(s.radiusSecretKey, nas.SecretCiphertext); decErr == nil && secret != "" {
+				if dErr := s.coaDisconnect(ctx, nas.IPAddress, secret, sess.AcctSessionID, sess.Username, sess.FramedIPAddress, sess.CallingStationID); dErr == nil {
+					coaSent = true
+				}
+			}
+		}
+	}
+
+	resultStatus := sess.Status
+	msg := "Voucher dicabut, namun router tidak merespons CoA port 3799"
+	if coaSent {
+		if cErr := s.accounts.CloseByID(ctx, sess.ID, now, "Admin-Reset"); cErr == nil {
+			resultStatus = model.AccountingSessionStatusClosed
+		}
+		if s.visitors != nil && sess.Username != "" {
+			_ = s.visitors.MarkDisconnected(ctx, sess.Username, now, sess.SessionTimeSeconds)
+		}
+		msg = "Sesi berhasil diputus langsung melalui CoA MikroTik"
+	}
+
+	s.recordAudit(ctx, actorID, actorName, "session.disconnect", "accounting_session", sess.ID, map[string]any{
+		"username":        sess.Username,
+		"mac":             sess.CallingStationID,
+		"nas_identifier":  sess.NASIdentifier,
+		"coa_sent":        coaSent,
+		"voucher_revoked": voucherRevoked,
+	})
+
+	return &dto.DisconnectSessionResponse{
+		SessionID:      sess.ID,
+		Status:         resultStatus,
+		CoASent:        coaSent,
+		VoucherRevoked: voucherRevoked,
+		Message:        msg,
+	}, nil
+}
+
+func (s *adminService) DeleteRouter(ctx context.Context, actorID, actorName, routerID string) error {
+	if s.routers == nil {
+		return apperror.ErrInternalServer
+	}
+	id := strings.TrimSpace(routerID)
+	router, err := s.routers.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	activeCampaigns, err := s.routers.CountActiveCampaigns(ctx, router.ID)
+	if err != nil {
+		return err
+	}
+	if activeCampaigns > 0 {
+		return apperror.New(apperror.ErrConflict, "Router masih terikat pada kampanye iklan aktif. Hentikan kampanye terlebih dahulu.")
+	}
+	if err := s.routers.SoftDelete(ctx, router.ID); err != nil {
+		return err
+	}
+	if s.nasClients != nil {
+		_ = s.nasClients.DeactivateByRouterID(ctx, router.ID)
+	}
+	s.recordAudit(ctx, actorID, actorName, "router.delete", "router", router.ID, map[string]any{
+		"name":           router.Name,
+		"nas_identifier": router.NASIdentifier,
+	})
+	return nil
+}
+
+func (s *adminService) BlockDevice(ctx context.Context, actorID, actorName, mac string, req dto.BlockDeviceRequest) (*dto.BlockedDeviceResponse, error) {
+	if s.blockedDevices == nil {
+		return nil, apperror.ErrInternalServer
+	}
+	normMAC := utils.NormalizeMAC(mac)
+	if normMAC == "" {
+		return nil, apperror.New(apperror.ErrBadRequest, "MAC address tidak valid")
+	}
+	var rid *string
+	if req.RouterID != nil && strings.TrimSpace(*req.RouterID) != "" {
+		v := strings.TrimSpace(*req.RouterID)
+		rid = &v
+	}
+	now := time.Now().UTC()
+	entry := &model.BlockedDevice{
+		ID:        uuid.NewString(),
+		MAC:       normMAC,
+		RouterID:  rid,
+		Reason:    strings.TrimSpace(req.Reason),
+		BlockedBy: actorName,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := s.blockedDevices.Block(ctx, entry); err != nil {
+		return nil, err
+	}
+
+	disconnect := true
+	if req.DisconnectActive != nil {
+		disconnect = *req.DisconnectActive
+	}
+	if disconnect && s.accounts != nil {
+		targetRouter := ""
+		if rid != nil {
+			targetRouter = *rid
+		}
+		if activeSess, err := s.accounts.FindActiveByMAC(ctx, normMAC, targetRouter); err == nil && activeSess != nil {
+			_, _ = s.DisconnectSession(ctx, actorID, actorName, activeSess.ID)
+		}
+	}
+
+	routerName := ""
+	if rid != nil && s.routers != nil {
+		if r, rErr := s.routers.FindByID(ctx, *rid); rErr == nil && r != nil {
+			routerName = r.Name
+		}
+	}
+
+	s.recordAudit(ctx, actorID, actorName, "visitor.block", "blocked_device", entry.ID, map[string]any{
+		"mac":       normMAC,
+		"router_id": rid,
+		"reason":    entry.Reason,
+	})
+
+	return &dto.BlockedDeviceResponse{
+		ID:         entry.ID,
+		MAC:        entry.MAC,
+		RouterID:   entry.RouterID,
+		RouterName: routerName,
+		Reason:     entry.Reason,
+		BlockedBy:  entry.BlockedBy,
+		CreatedAt:  entry.CreatedAt,
+	}, nil
+}
+
+func (s *adminService) UnblockDevice(ctx context.Context, actorID, actorName, mac, routerID string) error {
+	if s.blockedDevices == nil {
+		return apperror.ErrInternalServer
+	}
+	normMAC := utils.NormalizeMAC(mac)
+	if normMAC == "" {
+		return apperror.New(apperror.ErrBadRequest, "MAC address tidak valid")
+	}
+	affected, err := s.blockedDevices.UnblockByMAC(ctx, normMAC, routerID)
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return apperror.New(apperror.ErrNotFound, "Perangkat tidak ditemukan di daftar blokir")
+	}
+	s.recordAudit(ctx, actorID, actorName, "visitor.unblock", "blocked_device", normMAC, map[string]any{
+		"mac":       normMAC,
+		"router_id": routerID,
+	})
+	return nil
+}
+
+func (s *adminService) ListBlockedDevices(ctx context.Context, query dto.BlockedDeviceListQuery) ([]dto.BlockedDeviceResponse, dto.PaginationMeta, error) {
+	if s.blockedDevices == nil {
+		return []dto.BlockedDeviceResponse{}, dto.PaginationMeta{CurrentPage: 1, PerPage: 20}, nil
+	}
+	page, perPage, _ := utils.NormalizePage(query.Page, query.PerPage)
+	items, total, err := s.blockedDevices.List(ctx, repository.BlockedDeviceFilter{
+		Page:     page,
+		PerPage:  perPage,
+		Search:   query.Search,
+		RouterID: query.RouterID,
+		Order:    query.Order,
+	})
+	if err != nil {
+		return nil, dto.PaginationMeta{}, err
+	}
+	routerMap := make(map[string]string)
+	if s.routers != nil {
+		if rList, rErr := s.routers.ListActive(ctx); rErr == nil {
+			for _, r := range rList {
+				routerMap[r.ID] = r.Name
+			}
+		}
+	}
+	out := make([]dto.BlockedDeviceResponse, 0, len(items))
+	for _, item := range items {
+		rName := ""
+		if item.RouterID != nil {
+			rName = routerMap[*item.RouterID]
+		}
+		out = append(out, dto.BlockedDeviceResponse{
+			ID:         item.ID,
+			MAC:        item.MAC,
+			RouterID:   item.RouterID,
+			RouterName: rName,
+			Reason:     item.Reason,
+			BlockedBy:  item.BlockedBy,
+			CreatedAt:  item.CreatedAt,
+		})
+	}
+	return out, dto.PaginationMeta{
+		CurrentPage: page,
+		PerPage:     perPage,
+		TotalItems:  total,
+		TotalPages:  utils.TotalPages(total, perPage),
+	}, nil
+}
+
+// suppress unused errors import check if needed
+var _ = errors.Is
+
+func (s *adminService) ListAuditLogs(ctx context.Context, query dto.AuditLogListQuery) ([]dto.AuditLogResponse, dto.PaginationMeta, error) {
+	if s.audits == nil {
+		return []dto.AuditLogResponse{}, dto.PaginationMeta{CurrentPage: 1, PerPage: 20}, nil
+	}
+	page, perPage, _ := utils.NormalizePage(query.Page, query.PerPage)
+	var fromPtr, toPtr *time.Time
+	if v := strings.TrimSpace(query.DateFrom); v != "" {
+		if parsed, err := time.Parse("2006-01-02", v); err == nil {
+			fromPtr = &parsed
+		}
+	}
+	if v := strings.TrimSpace(query.DateTo); v != "" {
+		if parsed, err := time.Parse("2006-01-02", v); err == nil {
+			end := parsed.Add(24*time.Hour - time.Second)
+			toPtr = &end
+		}
+	}
+	items, total, err := s.audits.List(ctx, repository.AuditLogFilter{
+		Page:       page,
+		PerPage:    perPage,
+		Action:     query.Action,
+		EntityType: query.EntityType,
+		ActorName:  query.ActorName,
+		Search:     query.Search,
+		DateFrom:   fromPtr,
+		DateTo:     toPtr,
+		Order:      query.Order,
+	})
+	if err != nil {
+		return nil, dto.PaginationMeta{}, err
+	}
+	out := make([]dto.AuditLogResponse, 0, len(items))
+	for _, it := range items {
+		out = append(out, dto.AuditLogResponse{
+			ID:         it.ID,
+			ActorID:    it.ActorID,
+			ActorName:  it.ActorName,
+			Action:     it.Action,
+			EntityType: it.EntityType,
+			EntityID:   it.EntityID,
+			Detail:     it.Detail,
+			IPAddress:  it.IPAddress,
+			CreatedAt:  it.CreatedAt,
+		})
+	}
+	return out, dto.PaginationMeta{
+		CurrentPage: page,
+		PerPage:     perPage,
+		TotalItems:  total,
+		TotalPages:  utils.TotalPages(total, perPage),
+	}, nil
+}
+
+func (s *adminService) AuditLogFilters(ctx context.Context) (*dto.AuditLogFiltersResponse, error) {
+	if s.audits == nil {
+		return &dto.AuditLogFiltersResponse{Actions: []string{}, EntityTypes: []string{}}, nil
+	}
+	actions, entities, err := s.audits.DistinctFilters(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if actions == nil {
+		actions = []string{}
+	}
+	if entities == nil {
+		entities = []string{}
+	}
+	return &dto.AuditLogFiltersResponse{Actions: actions, EntityTypes: entities}, nil
+}
+
+func (s *adminService) CleanupAuditLogs(ctx context.Context, actorID, actorName, actorRole string, days int) (*dto.AuditCleanupResponse, error) {
+	if actorRole != "super_admin" && actorRole != "admin" {
+		return nil, apperror.New(apperror.ErrForbidden, "Hanya super_admin yang dapat membersihkan log sistem")
+	}
+	if s.audits == nil {
+		return nil, apperror.ErrInternalServer
+	}
+	if days < 7 {
+		days = 90
+	}
+	cutoff := time.Now().UTC().AddDate(0, 0, -days)
+	deleted, err := s.audits.CleanupOlderThan(ctx, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	s.recordAudit(ctx, actorID, actorName, "audit_logs.cleanup", "audit_log", "", map[string]any{
+		"days":    days,
+		"deleted": deleted,
+	})
+	return &dto.AuditCleanupResponse{Days: days, Deleted: deleted}, nil
 }

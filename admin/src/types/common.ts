@@ -7,4 +7,5 @@ export interface ListQuery {
   per_page: number
   search?: string
   status?: string
+  router_id?: string
 }

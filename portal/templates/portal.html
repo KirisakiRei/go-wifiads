@@ -22,9 +22,9 @@
           </svg>
         </div>
 
-        <h1 class="card-title">Wi-Fi Gratis</h1>
+        <h1 class="card-title">{{if index .PortalSettings "portal.welcome_title"}}{{index .PortalSettings "portal.welcome_title"}}{{else}}Wi-Fi Gratis{{end}}</h1>
         <p class="card-subtitle">
-          Tonton iklan singkat selama <strong>{{.AdDurationSeconds}} detik</strong> untuk terhubung ke internet.
+          {{if index .PortalSettings "portal.welcome_subtitle"}}{{index .PortalSettings "portal.welcome_subtitle"}} ({{.AdDurationSeconds}} detik){{else}}Tonton iklan singkat selama <strong>{{.AdDurationSeconds}} detik</strong> untuk terhubung ke internet.{{end}}
         </p>
 
         <div id="welcome-status" class="notice" role="status" aria-live="polite" hidden></div>
@@ -32,16 +32,59 @@
         <button type="button" class="btn-primary" id="start-button">
           Hubungkan Sekarang
         </button>
+        {{if ne (index .PortalSettings "portal.enable_voucher_redeem") "false"}}
+        <button type="button" class="btn-link-subtle" id="open-voucher-btn">
+          Punya kode voucher?
+        </button>
+        {{end}}
       </div>
     </section>
+    <!-- ============ VOUCHER REDEEM MODAL (OPTIONAL VIP/CASHIER) ============ -->
+    <div id="voucher-modal" class="portal-modal" role="dialog" aria-modal="true" aria-labelledby="voucher-modal-title" hidden>
+      <div class="portal-modal-backdrop" id="voucher-modal-backdrop"></div>
+      <div class="portal-card portal-modal-card">
+        <div class="portal-modal-head">
+          <h2 class="card-title" id="voucher-modal-title" style="font-size: 1.12rem; margin: 0;">Masuk dengan Voucher</h2>
+          <button type="button" class="modal-close-btn" id="close-voucher-btn" aria-label="Tutup">&times;</button>
+        </div>
+        <p class="card-subtitle" style="margin-top: 6px; margin-bottom: 14px;">
+          Masukkan kode voucher dari kasir atau admin untuk terhubung langsung tanpa iklan.
+        </p>
+        <form id="voucher-form" class="survey-form" onsubmit="return false;">
+          <div class="form-group">
+            <label for="voucher-code" class="form-label">Kode / Username Voucher</label>
+            <input type="text" id="voucher-code" class="form-input" placeholder="Contoh: VIP001" autocomplete="off" autocapitalize="characters">
+          </div>
+          <div class="form-group">
+            <label for="voucher-password" class="form-label">Kata Sandi <span style="font-weight:400;color:var(--muted);">(opsional jika 1 kode)</span></label>
+            <input type="password" id="voucher-password" class="form-input" placeholder="Kosongkan jika hanya 1 kode" autocomplete="off">
+          </div>
+          <div id="voucher-status" class="notice" role="alert" aria-live="polite" hidden></div>
+          <button type="button" class="btn-primary" id="voucher-submit-btn">
+            Gunakan Voucher
+          </button>
+        </form>
+      </div>
+    </div>
 
     <!-- ============ SCREEN 2: REWARDED AD (IN-APP / IN-GAME STYLE) ============ -->
     <section class="screen screen-ad {{if .Ad}}{{if eq .Ad.LayoutMode "portrait"}}ad-layout--portrait{{else}}ad-layout--landscape{{end}}{{else}}ad-layout--landscape{{end}}" data-screen="ad" aria-label="Iklan">
       <div class="ad-stage">
-        <!-- Top HUD Bar: Left = subtle "Iklan" label, Right = Timer / Next button -->
+        <!-- Thin top edge progress bar -->
+        <div class="ad-edge-progress" aria-hidden="true">
+          <div class="ad-edge-progress-fill" id="ad-edge-progress-fill"></div>
+        </div>
+        <!-- Top HUD Bar: Left = subtle "Iklan" label (+ Mute for video), Right = Timer / Next button -->
         <div class="ad-hud-top">
-          <div class="ad-sponsor-pill">
-            <span>Iklan</span>
+          <div class="ad-hud-left">
+            <div class="ad-sponsor-pill">
+              <span>Iklan</span>
+            </div>
+            {{if .IsVideo}}
+            <button type="button" class="ad-mute-btn" id="ad-mute-btn" aria-label="Nyalakan suara video" title="Suara">
+              <span id="ad-mute-label">Suara Mati</span>
+            </button>
+            {{end}}
           </div>
 
           <div class="ad-reward-control">
@@ -109,8 +152,45 @@
             Isi kontak Anda di bawah ini, atau langsung lanjutkan tanpa mengisi data.
           </p>
         </div>
+        <div id="survey-tiers" class="speed-tiers" hidden>
+          <div class="speed-tier speed-tier--highlight">
+            <div class="speed-tier-name">Isi Singkat</div>
+            <div class="speed-tier-val" id="tier-survey-val">Lebih Cepat</div>
+            <div class="speed-tier-desc" id="tier-survey-desc">Akses prioritas lebih lama</div>
+          </div>
+          <div class="speed-tier">
+            <div class="speed-tier-name">Lewati</div>
+            <div class="speed-tier-val" id="tier-default-val">Standar</div>
+            <div class="speed-tier-desc" id="tier-default-desc">Akses reguler</div>
+          </div>
+        </div>
 
         <form id="survey-form" class="survey-form" onsubmit="return false;">
+          {{if .ActiveFields}}
+            {{range .ActiveFields}}
+            <div class="form-group">
+              <label for="qf-{{.Key}}" class="form-label">{{.Label}}{{if .Required}} *{{end}}</label>
+              {{if eq .Type "SELECT"}}
+                <select id="qf-{{.Key}}" class="form-input" data-qkey="{{.Key}}" {{if .Required}}data-qreq="1"{{end}}>
+                  <option value="">{{if .Placeholder}}{{.Placeholder}}{{else}}-- Pilih --{{end}}</option>
+                  {{range .Options}}
+                    <option value="{{.}}">{{.}}</option>
+                  {{end}}
+                </select>
+              {{else if eq .Type "TEXTAREA"}}
+                <textarea id="qf-{{.Key}}" class="form-input" rows="2" data-qkey="{{.Key}}" {{if .Required}}data-qreq="1"{{end}} placeholder="{{.Placeholder}}"></textarea>
+              {{else if eq .Type "EMAIL"}}
+                <input type="email" id="qf-{{.Key}}" class="form-input" data-qkey="{{.Key}}" {{if .Required}}data-qreq="1"{{end}} placeholder="{{.Placeholder}}" autocomplete="email">
+              {{else if eq .Type "PHONE"}}
+                <input type="tel" id="qf-{{.Key}}" class="form-input" data-qkey="{{.Key}}" {{if .Required}}data-qreq="1"{{end}} placeholder="{{.Placeholder}}" autocomplete="tel">
+              {{else if eq .Type "NUMBER"}}
+                <input type="number" id="qf-{{.Key}}" class="form-input" data-qkey="{{.Key}}" {{if .Required}}data-qreq="1"{{end}} placeholder="{{.Placeholder}}">
+              {{else}}
+                <input type="text" id="qf-{{.Key}}" class="form-input" data-qkey="{{.Key}}" {{if .Required}}data-qreq="1"{{end}} placeholder="{{.Placeholder}}">
+              {{end}}
+            </div>
+            {{end}}
+          {{else}}
           <div class="form-group">
             <label for="survey-email" class="form-label">Email</label>
             <input type="email" id="survey-email" class="form-input" placeholder="nama@email.com" autocomplete="email">
@@ -120,6 +200,7 @@
             <label for="survey-phone" class="form-label">Nomor WhatsApp / HP</label>
             <input type="tel" id="survey-phone" class="form-input" placeholder="0812xxxxxxxx" autocomplete="tel">
           </div>
+          {{end}}
 
           <div id="survey-status" class="notice notice-survey" role="alert" aria-live="polite" hidden></div>
 
@@ -145,14 +226,45 @@
           </svg>
         </div>
 
-        <h1 class="card-title">Terhubung ke Internet</h1>
-        <p class="card-subtitle">Koneksi Wi-Fi Anda sudah aktif dan siap digunakan.</p>
-
+        <h1 class="card-title" id="connected-title">Terhubung ke Internet</h1>
+        <p class="card-subtitle" id="connected-subtitle">Koneksi Wi-Fi Anda sudah aktif dan siap digunakan.</p>
+        <!-- Live Active Session Stats (shown when /portal detects an active RADIUS session) -->
+        <div id="live-session-panel" class="live-session-panel" hidden>
+          <div class="live-stat-grid">
+            <div class="live-stat-item">
+              <span class="live-stat-label">Paket Akses</span>
+              <strong class="live-stat-value" id="live-profile">—</strong>
+            </div>
+            <div class="live-stat-item">
+              <span class="live-stat-label">Sisa Waktu</span>
+              <strong class="live-stat-value" id="live-remaining">—</strong>
+            </div>
+            <div class="live-stat-item">
+              <span class="live-stat-label">Data Terpakai</span>
+              <strong class="live-stat-value" id="live-traffic">—</strong>
+            </div>
+            <div class="live-stat-item">
+              <span class="live-stat-label">Durasi Online</span>
+              <strong class="live-stat-value" id="live-uptime">—</strong>
+            </div>
+          </div>
+          <div class="session-expiry-bar" id="live-meta-bar">
+            Voucher: <strong id="live-username">—</strong> · Lokasi: <strong id="live-router">—</strong>
+          </div>
+          <div id="live-status" class="notice" role="status" aria-live="polite" hidden></div>
+          <div class="live-session-actions">
+            <button type="button" class="btn-secondary" id="refresh-session-btn">
+              Segarkan Status
+            </button>
+            <button type="button" class="btn-danger-outline" id="disconnect-session-btn">
+              Putuskan Koneksi
+            </button>
+          </div>
+        </div>
         <a class="btn-primary btn-redirect-link" id="redirect-now" href="https://www.google.com">
           Mulai Browsing
         </a>
-
-        <p class="redirect-hint">
+        <p class="redirect-hint" id="redirect-hint-wrap">
           Mengalihkan halaman otomatis dalam <strong id="conn-redirect-count">10</strong> detik...
           <span id="conn-redirect-inline" hidden>10</span>
         </p>

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 
 	"wifiads/internal/dto"
@@ -105,4 +107,132 @@ func (h *AdminHandler) UpdateRouterVoucherConfig(c *gin.Context) {
 		return
 	}
 	httpx.OK(c, "Voucher configuration updated successfully", res)
+}
+
+// DeleteRouter soft-deletes a router and disables its RADIUS NAS client.
+func (h *AdminHandler) DeleteRouter(c *gin.Context) {
+	err := h.admin.DeleteRouter(
+		c.Request.Context(),
+		middleware.AdminID(c),
+		middleware.AdminUsername(c),
+		c.Param("id"),
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Router berhasil dihapus", nil)
+}
+
+// DisconnectSession terminates an active session via RADIUS CoA (port 3799) with voucher revoke fallback.
+func (h *AdminHandler) DisconnectSession(c *gin.Context) {
+	res, err := h.admin.DisconnectSession(
+		c.Request.Context(),
+		middleware.AdminID(c),
+		middleware.AdminUsername(c),
+		c.Param("id"),
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, res.Message, res)
+}
+
+// BlockDevice adds a MAC address to the blocklist and optionally disconnects its active session.
+func (h *AdminHandler) BlockDevice(c *gin.Context) {
+	var req dto.BlockDeviceRequest
+	if c.Request.ContentLength > 0 {
+		if !bindJSON(c, &req, "Invalid block device payload") {
+			return
+		}
+	}
+	res, err := h.admin.BlockDevice(
+		c.Request.Context(),
+		middleware.AdminID(c),
+		middleware.AdminUsername(c),
+		c.Param("mac"),
+		req,
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.Created(c, "Perangkat berhasil diblokir", res)
+}
+
+// UnblockDevice removes a MAC address from the blocklist.
+func (h *AdminHandler) UnblockDevice(c *gin.Context) {
+	err := h.admin.UnblockDevice(
+		c.Request.Context(),
+		middleware.AdminID(c),
+		middleware.AdminUsername(c),
+		c.Param("mac"),
+		c.Query("router_id"),
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Blokir perangkat berhasil dibuka", nil)
+}
+
+// ListBlockedDevices returns paginated blocked MAC addresses.
+func (h *AdminHandler) ListBlockedDevices(c *gin.Context) {
+	var query dto.BlockedDeviceListQuery
+	if !bindQuery(c, &query, "Invalid blocked devices query") {
+		return
+	}
+	items, meta, err := h.admin.ListBlockedDevices(c.Request.Context(), query)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.Paginated(c, "Daftar perangkat diblokir", items, meta)
+}
+
+// ListAuditLogs returns paginated system/admin audit logs.
+func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
+	var query dto.AuditLogListQuery
+	if !bindQuery(c, &query, "Invalid audit log query") {
+		return
+	}
+	items, meta, err := h.admin.ListAuditLogs(c.Request.Context(), query)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.Paginated(c, "Audit logs retrieved", items, meta)
+}
+
+// AuditLogFilters returns distinct action and entity_type filter values.
+func (h *AdminHandler) AuditLogFilters(c *gin.Context) {
+	res, err := h.admin.AuditLogFilters(c.Request.Context())
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Audit log filters retrieved", res)
+}
+
+// CleanupAuditLogs deletes audit logs older than ?days=90 (super_admin only).
+func (h *AdminHandler) CleanupAuditLogs(c *gin.Context) {
+	days := 90
+	if raw := c.Query("days"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			days = parsed
+		}
+	}
+	res, err := h.admin.CleanupAuditLogs(
+		c.Request.Context(),
+		middleware.AdminID(c),
+		middleware.AdminUsername(c),
+		middleware.AdminRole(c),
+		days,
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpx.OK(c, "Log sistem lama berhasil dibersihkan", res)
 }

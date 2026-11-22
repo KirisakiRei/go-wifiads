@@ -2,12 +2,15 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"wifiads/internal/model"
+	"wifiads/pkg/apperror"
 )
 
 // RecordEvent stores the packet fingerprint and reports false for duplicates.
@@ -33,6 +36,9 @@ func (r *accountingRepository) ListSessions(ctx context.Context, filter SessionF
 	}
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
+	}
+	if rid := strings.TrimSpace(filter.RouterID); rid != "" {
+		query = query.Where("router_id = ?", rid)
 	}
 
 	var total int64
@@ -90,4 +96,87 @@ func (r *accountingRepository) HasActiveSessionForVoucher(ctx context.Context, v
 		return false, err
 	}
 	return total > 0, nil
+}
+
+func (r *accountingRepository) FindByID(ctx context.Context, id string) (*model.AccountingSession, error) {
+	var session model.AccountingSession
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&session).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperror.ErrNotFound
+		}
+		return nil, err
+	}
+	return &session, nil
+}
+
+// FindActiveByMAC returns the newest ACTIVE accounting session for a normalized MAC address
+// (optionally narrowed to a specific router_id). Uses indexed calling_station_id + status.
+func (r *accountingRepository) FindActiveByMAC(ctx context.Context, mac string, routerID string) (*model.AccountingSession, error) {
+	var session model.AccountingSession
+	q := r.db.WithContext(ctx).
+		Where("calling_station_id = ? AND status = ?", mac, model.AccountingSessionStatusActive)
+	if strings.TrimSpace(routerID) != "" {
+		q = q.Where("router_id = ?", routerID)
+	}
+	err := q.Order("COALESCE(started_at, created_at) DESC").First(&session).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperror.ErrNotFound
+		}
+		return nil, err
+	}
+	return &session, nil
+}
+
+// AggregateByNAS aggregates active/total session counts, traffic bytes and latest activity per NAS in a single SQL query.
+func (r *accountingRepository) AggregateByNAS(ctx context.Context) (map[string]RouterAccountingStats, error) {
+	type row struct {
+		NASIdentifier  string
+		ActiveSessions int64
+		TotalSessions  int64
+		InputOctets    int64
+		OutputOctets   int64
+		LastSeenAt     *time.Time
+	}
+	var rows []row
+	err := r.db.WithContext(ctx).Model(&model.AccountingSession{}).
+		Select(`
+			LOWER(TRIM(nas_identifier)) AS nas_identifier,
+			COUNT(*) FILTER (WHERE status = 'ACTIVE') AS active_sessions,
+			COUNT(*) AS total_sessions,
+			COALESCE(SUM(input_octets), 0) AS input_octets,
+			COALESCE(SUM(output_octets), 0) AS output_octets,
+			MAX(COALESCE(last_accounting_at, started_at, created_at)) AS last_seen_at
+		`).
+		Where("nas_identifier <> ''").
+		Group("LOWER(TRIM(nas_identifier))").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]RouterAccountingStats, len(rows))
+	for _, item := range rows {
+		out[item.NASIdentifier] = RouterAccountingStats{
+			NASIdentifier:  item.NASIdentifier,
+			ActiveSessions: item.ActiveSessions,
+			TotalSessions:  item.TotalSessions,
+			InputOctets:    item.InputOctets,
+			OutputOctets:   item.OutputOctets,
+			LastSeenAt:     item.LastSeenAt,
+		}
+	}
+	return out, nil
+}
+
+func (r *accountingRepository) CloseByID(ctx context.Context, id string, at time.Time, cause string) error {
+	return r.db.WithContext(ctx).Model(&model.AccountingSession{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"status":             model.AccountingSessionStatusClosed,
+			"stopped_at":         at,
+			"last_accounting_at": at,
+			"terminate_cause":    cause,
+			"updated_at":         at,
+		}).Error
 }

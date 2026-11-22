@@ -56,13 +56,18 @@ func (s *profileService) Create(ctx context.Context, req dto.CreateProfileReques
 		voucherTTL = 300
 	}
 
+	sharedUsers := req.SharedUsers
+	if sharedUsers <= 0 {
+		sharedUsers = 1
+	}
+
 	p := &model.ConnectProfile{
 		Base: model.Base{
 			ID:        uuid.NewString(),
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
-		Name:                  name,
+		Name:                  strings.TrimSpace(req.Name),
 		DisplayName:           strings.TrimSpace(req.DisplayName),
 		Description:           strings.TrimSpace(req.Description),
 		IsDefault:             req.IsDefault,
@@ -70,6 +75,8 @@ func (s *profileService) Create(ctx context.Context, req dto.CreateProfileReques
 		BandwidthDownKbps:     req.BandwidthDownKbps,
 		SessionTimeoutSeconds: req.SessionTimeoutSeconds,
 		VoucherTTLSeconds:     voucherTTL,
+		QuotaBytes:            req.QuotaBytes,
+		SharedUsers:           sharedUsers,
 		IsActive:              req.IsActive,
 	}
 
@@ -96,6 +103,10 @@ func (s *profileService) Update(ctx context.Context, id string, req dto.UpdatePr
 	if req.VoucherTTLSeconds > 0 {
 		p.VoucherTTLSeconds = req.VoucherTTLSeconds
 	}
+	p.QuotaBytes = req.QuotaBytes
+	if req.SharedUsers > 0 {
+		p.SharedUsers = req.SharedUsers
+	}
 	p.IsActive = req.IsActive
 	p.UpdatedAt = time.Now().UTC()
 
@@ -107,7 +118,26 @@ func (s *profileService) Update(ctx context.Context, id string, req dto.UpdatePr
 	return &res, nil
 }
 
+func (s *profileService) Delete(ctx context.Context, actorID, actorName, id string) error {
+	p, err := s.profiles.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	usedCount, err := s.profiles.CountRoutersUsingProfile(ctx, p.ID)
+	if err != nil {
+		return err
+	}
+	if usedCount > 0 {
+		return apperror.New(apperror.ErrConflict, "Profil masih digunakan sebagai profil default/survei pada router aktif.")
+	}
+	return s.profiles.Delete(ctx, p.ID)
+}
+
 func toProfileResponse(p *model.ConnectProfile) dto.ConnectProfileResponse {
+	shared := p.SharedUsers
+	if shared <= 0 {
+		shared = 1
+	}
 	return dto.ConnectProfileResponse{
 		ID:                    p.ID,
 		Name:                  p.Name,
@@ -118,6 +148,8 @@ func toProfileResponse(p *model.ConnectProfile) dto.ConnectProfileResponse {
 		BandwidthDownKbps:     p.BandwidthDownKbps,
 		SessionTimeoutSeconds: p.SessionTimeoutSeconds,
 		VoucherTTLSeconds:     p.VoucherTTLSeconds,
+		QuotaBytes:            p.QuotaBytes,
+		SharedUsers:           shared,
 		IsActive:              p.IsActive,
 		CreatedAt:             p.CreatedAt,
 		UpdatedAt:             p.UpdatedAt,

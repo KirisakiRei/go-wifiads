@@ -15,8 +15,15 @@ import { AdvertiserProfilePage } from '@/features/advertiser-portal/pages/advert
 import { AdvertiserWalletPage } from '@/features/advertiser-portal/pages/advertiser-wallet-page'
 import { AdvertisementFormPage } from '@/features/advertisements/pages/advertisement-form-page'
 import { AdvertisementsPage } from '@/features/advertisements/pages/advertisements-page'
+import { AuditLogsPage } from '@/features/audit-logs/audit-logs-page'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import { DashboardPage } from '@/features/dashboard/pages/dashboard-page'
+import { PublicLayout } from '@/features/public-site/components/public-layout'
+import { KontakPage, TentangPage } from '@/features/public-site/pages/about-contact-pages'
+import { DaftarMitraPage } from '@/features/public-site/pages/daftar-mitra-page'
+import { PublicHomePage } from '@/features/public-site/pages/home-page'
+import { IklanInfoPage } from '@/features/public-site/pages/iklan-info-page'
+import { MitraInfoPage } from '@/features/public-site/pages/mitra-info-page'
 import { AdminAdSettingsPage } from '@/features/marketplace/pages/admin-ad-settings-page'
 import { AdminAdvertisersPage } from '@/features/marketplace/pages/admin-advertisers-page'
 import { AdminCampaignsPage } from '@/features/marketplace/pages/admin-campaigns-page'
@@ -37,8 +44,11 @@ import { PartnerOverviewPage } from '@/features/partner-portal/pages/partner-ove
 import { PartnerProfilePage } from '@/features/partner-portal/pages/partner-profile-page'
 import { PartnerRoutersPage } from '@/features/partner-portal/pages/partner-routers-page'
 import { ProfilesPage } from '@/features/profiles/pages/profiles-page'
+import { QuestionnairePage } from '@/features/questionnaire/questionnaire-page'
 import { RouterDetailPage } from '@/features/routers/pages/router-detail-page'
 import { RoutersPage } from '@/features/routers/pages/routers-page'
+import { SessionsPage } from '@/features/sessions/pages/sessions-page'
+import { SettingsPage } from '@/features/settings/settings-page'
 import { UsersPage } from '@/features/users/pages/users-page'
 import { VisitorsPage } from '@/features/visitors/pages/visitors-page'
 import { VouchersPage } from '@/features/vouchers/pages/vouchers-page'
@@ -91,7 +101,10 @@ export function createAdminRouter() {
           { path: '/advertisements/:id/edit', element: <AdvertisementFormPage /> },
           { path: '/vouchers', element: <VouchersPage /> },
           { path: '/visitors', element: <VisitorsPage /> },
-          { path: '/sessions', element: <Navigate to="/routers" replace /> },
+          { path: '/sessions', element: <SessionsPage /> },
+          { path: '/questionnaire', element: <QuestionnairePage /> },
+          { path: '/logs', element: <AuditLogsPage /> },
+          { path: '/settings', element: <SettingsPage /> },
           { path: '/users', element: <UsersPage /> },
         ],
       },
@@ -175,4 +188,21 @@ export function createPartnerRouter() {
     ],
     { basename: '/partner' }
   )
+}
+
+export function createPublicRouter() {
+  return createBrowserRouter([
+    {
+      element: <PublicLayout />,
+      children: [
+        { path: '/', element: <PublicHomePage /> },
+        { path: '/mitra-info', element: <MitraInfoPage /> },
+        { path: '/iklan-info', element: <IklanInfoPage /> },
+        { path: '/daftar-mitra', element: <DaftarMitraPage /> },
+        { path: '/tentang', element: <TentangPage /> },
+        { path: '/kontak', element: <KontakPage /> },
+        { path: '*', element: <Navigate to="/" replace /> },
+      ],
+    },
+  ])
 }

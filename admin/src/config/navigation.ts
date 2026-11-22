@@ -1,12 +1,16 @@
 import type { LucideIcon } from 'lucide-react'
 import {
+  Activity,
   ArrowUpRight,
   Building2,
+  ClipboardList,
   Gauge,
   Landmark,
   LayoutDashboard,
   Megaphone,
   Router,
+  ScrollText,
+  Settings2,
   ShieldCheck,
   Sliders,
   Store,
@@ -47,6 +51,7 @@ export const navigationSections: NavSection[] = [
     items: [
       { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
       { label: 'Router', to: '/routers', icon: Router },
+      { label: 'Sesi Aktif', to: '/sessions', icon: Activity },
       { label: 'Profil Paket', to: '/profiles', icon: Gauge },
       { label: 'Voucher', to: '/vouchers', icon: Ticket },
       { label: 'Pengunjung', to: '/visitors', icon: Users },
@@ -104,6 +109,9 @@ export const navigationSections: NavSection[] = [
     title: 'Konten & Sistem',
     items: [
       { label: 'Iklan Default', to: '/advertisements', icon: Megaphone },
+      { label: 'Kuesioner', to: '/questionnaire', icon: ClipboardList },
+      { label: 'Log Sistem', to: '/logs', icon: ScrollText },
+      { label: 'Pengaturan Portal', to: '/settings', icon: Settings2 },
       { label: 'Pengguna & Akses', to: '/users', icon: ShieldCheck },
     ],
   },

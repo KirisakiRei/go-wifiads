@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -90,6 +92,10 @@ func (r *nasClientRepository) Count(ctx context.Context) (int64, error) {
 	return total, nil
 }
 
+func (r *nasClientRepository) DeactivateByRouterID(ctx context.Context, routerID string) error {
+	return r.db.WithContext(ctx).Model(&model.NASClient{}).Where("router_id = ?", routerID).Update("is_active", false).Error
+}
+
 type advertisementRepository struct {
 	db *gorm.DB
 }
@@ -149,6 +155,23 @@ func (r *advertisementRepository) Count(ctx context.Context) (int64, error) {
 	return total, nil
 }
 
+func (r *advertisementRepository) RecordWatchMetrics(ctx context.Context, adID string, completed bool, watchSeconds int) error {
+	if adID == "" {
+		return nil
+	}
+	updates := map[string]any{}
+	if completed {
+		updates["completions_count"] = gorm.Expr("completions_count + 1")
+	}
+	if watchSeconds > 0 {
+		updates["total_watch_seconds"] = gorm.Expr("total_watch_seconds + ?", watchSeconds)
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Model(&model.Advertisement{}).Where("id = ?", adID).Updates(updates).Error
+}
+
 type auditLogRepository struct {
 	db *gorm.DB
 }
@@ -160,4 +183,59 @@ func NewAuditLogRepository(db *gorm.DB) AuditLogRepository {
 
 func (r *auditLogRepository) Create(ctx context.Context, entry *model.AuditLog) error {
 	return r.db.WithContext(ctx).Create(entry).Error
+}
+
+func (r *auditLogRepository) List(ctx context.Context, filter AuditLogFilter) ([]model.AuditLog, int64, error) {
+	q := r.db.WithContext(ctx).Model(&model.AuditLog{})
+	if v := strings.TrimSpace(filter.Action); v != "" {
+		q = q.Where("action = ?", v)
+	}
+	if v := strings.TrimSpace(filter.EntityType); v != "" {
+		q = q.Where("entity_type = ?", v)
+	}
+	if v := strings.TrimSpace(filter.ActorName); v != "" {
+		q = q.Where("actor_name ILIKE ?", likePattern(v))
+	}
+	if v := strings.TrimSpace(filter.Search); v != "" {
+		pat := likePattern(v)
+		q = q.Where("(action ILIKE ? OR entity_type ILIKE ? OR entity_id ILIKE ? OR actor_name ILIKE ? OR detail ILIKE ?)", pat, pat, pat, pat, pat)
+	}
+	if filter.DateFrom != nil {
+		q = q.Where("created_at >= ?", *filter.DateFrom)
+	}
+	if filter.DateTo != nil {
+		q = q.Where("created_at <= ?", *filter.DateTo)
+	}
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var rows []model.AuditLog
+	if err := q.
+		Order(orderClause("created_at", filter.Order)).
+		Limit(filter.PerPage).
+		Offset((filter.Page - 1) * filter.PerPage).
+		Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
+func (r *auditLogRepository) DistinctFilters(ctx context.Context) ([]string, []string, error) {
+	var actions []string
+	if err := r.db.WithContext(ctx).Model(&model.AuditLog{}).
+		Distinct("action").Where("action <> ''").Order("action ASC").Pluck("action", &actions).Error; err != nil {
+		return nil, nil, err
+	}
+	var entities []string
+	if err := r.db.WithContext(ctx).Model(&model.AuditLog{}).
+		Distinct("entity_type").Where("entity_type <> ''").Order("entity_type ASC").Pluck("entity_type", &entities).Error; err != nil {
+		return nil, nil, err
+	}
+	return actions, entities, nil
+}
+
+func (r *auditLogRepository) CleanupOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	res := r.db.WithContext(ctx).Where("created_at < ?", cutoff).Delete(&model.AuditLog{})
+	return res.RowsAffected, res.Error
 }

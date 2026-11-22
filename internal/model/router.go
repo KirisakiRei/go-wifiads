@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 const (
 	RouterStatusActive   = "ACTIVE"
 	RouterStatusInactive = "INACTIVE"
@@ -26,13 +28,14 @@ type Router struct {
 	IsPublicMarketplace bool     `gorm:"not null;default:true" json:"is_public_marketplace"`
 
 	// Voucher Generation Configuration for this Router
-	VoucherPrefix         string  `gorm:"type:varchar(16);default:'WF-'" json:"voucher_prefix"`
-	VoucherDigitCount     int     `gorm:"default:6" json:"voucher_digit_count"`
-	VoucherNumericOnly    bool    `gorm:"default:true" json:"voucher_numeric_only"`
-	DefaultProfileID      *string `gorm:"type:uuid;index" json:"default_profile_id,omitempty"`
-	SurveyProfileID       *string `gorm:"type:uuid;index" json:"survey_profile_id,omitempty"`
-	VoucherTTLSeconds     int     `gorm:"default:86400" json:"voucher_ttl_seconds"`
-	SessionTimeoutSeconds int     `gorm:"default:3600" json:"session_timeout_seconds"`
+	VoucherPrefix         string     `gorm:"type:varchar(16);default:'WF-'" json:"voucher_prefix"`
+	VoucherDigitCount     int        `gorm:"default:6" json:"voucher_digit_count"`
+	VoucherNumericOnly    bool       `gorm:"default:true" json:"voucher_numeric_only"`
+	DefaultProfileID      *string    `gorm:"type:uuid;index" json:"default_profile_id,omitempty"`
+	SurveyProfileID       *string    `gorm:"type:uuid;index" json:"survey_profile_id,omitempty"`
+	VoucherTTLSeconds     int        `gorm:"default:86400" json:"voucher_ttl_seconds"`
+	SessionTimeoutSeconds int        `gorm:"default:3600" json:"session_timeout_seconds"`
+	LastSeenAt            *time.Time `gorm:"index" json:"last_seen_at,omitempty"`
 }
 
 func (Router) TableName() string {

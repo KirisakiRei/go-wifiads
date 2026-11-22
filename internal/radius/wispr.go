@@ -16,9 +16,13 @@ const (
 	wisprAttrBandwidthMaxUp   = 7
 	wisprAttrBandwidthMaxDown = 8
 
-	// MikroTik official dictionary attribute type (Vendor 14988):
-	// 8 = Mikrotik-Rate-Limit (string, "<rx-rate>/<tx-rate>" e.g. "512k/1024k")
-	mikrotikAttrRateLimit = 8
+	// MikroTik official dictionary attribute types (Vendor 14988):
+	// 8  = Mikrotik-Rate-Limit (string, "<rx-rate>/<tx-rate>" e.g. "512k/1024k")
+	// 17 = Mikrotik-Total-Limit (integer, lower 32 bits of total bytes limit)
+	// 18 = Mikrotik-Total-Limit-Gigawords (integer, upper 32 bits of total bytes limit)
+	mikrotikAttrRateLimit           = 8
+	mikrotikAttrTotalLimit          = 17
+	mikrotikAttrTotalLimitGigawords = 18
 )
 
 // addWISPrBandwidth appends both MikroTik-Rate-Limit (Vendor 14988, Attr 8)
@@ -54,6 +58,25 @@ func addWISPrBandwidth(response *radius.Packet, upKbps, downKbps int) {
 	}
 	if downKbps > 0 {
 		if attr, err := radius.NewVendorSpecific(vendorIDWISPr, wispBandwidthValue(wisprAttrBandwidthMaxDown, uint32(downKbps*1000))); err == nil {
+			response.Attributes.Add(26, attr)
+		}
+	}
+}
+
+// addMikroTikQuota appends Mikrotik-Total-Limit (Vendor 14988, type 17) and
+// Mikrotik-Total-Limit-Gigawords (type 18, when >= 4 GiB) when quotaBytes > 0.
+func addMikroTikQuota(response *radius.Packet, quotaBytes int64) {
+	if quotaBytes <= 0 {
+		return
+	}
+	u := uint64(quotaBytes)
+	low := uint32(u & 0xFFFFFFFF)
+	high := uint32(u >> 32)
+	if attr, err := radius.NewVendorSpecific(vendorIDMikroTik, wispBandwidthValue(mikrotikAttrTotalLimit, low)); err == nil {
+		response.Attributes.Add(26, attr)
+	}
+	if high > 0 {
+		if attr, err := radius.NewVendorSpecific(vendorIDMikroTik, wispBandwidthValue(mikrotikAttrTotalLimitGigawords, high)); err == nil {
 			response.Attributes.Add(26, attr)
 		}
 	}

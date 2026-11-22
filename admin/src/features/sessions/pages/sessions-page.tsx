@@ -1,13 +1,17 @@
+import { useState } from 'react'
 import {
   AlertTriangle,
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
   Download,
+  PowerOff,
+  RefreshCw,
   Router,
   Smartphone,
   Upload,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { EmptyState, ErrorState, LoadingState } from '@/components/feedback/query-state'
 import {
   DataTableCard,
@@ -18,30 +22,60 @@ import {
   StatusPill,
   WavyHeader,
 } from '@/components/ui'
-import { formatBytes, formatDate, formatDuration } from '@/lib/formatters'
+import { useRouters } from '@/features/routers/use-routers'
+import { useDisconnectSession, useSessions } from '@/features/sessions/hooks/use-sessions'
 import { useTableQuery } from '@/hooks/use-table-query'
-import { useSessions } from '@/features/sessions/hooks/use-sessions'
+import { formatBytes, formatDate, formatDuration } from '@/lib/formatters'
 
 export function SessionsPage() {
   const { query, searchParams, searchTerm, setSearchTerm, setFilter } = useTableQuery(350)
-  const { data, isPending, error } = useSessions(query)
+  const { data, isPending, error, refetch, isFetching } = useSessions(query)
+  const { data: routers = [] } = useRouters()
+  const disconnectMutation = useDisconnectSession()
+  const [confirmKickId, setConfirmKickId] = useState<string | null>(null)
 
   if (isPending) return <LoadingState />
   if (error || !data) return <ErrorState message="Gagal memuat sesi RADIUS." />
 
   const activeSessions = data.data.filter((s) => s.status === 'ACTIVE').length
   const staleSessions = data.data.filter((s) => s.status === 'STALE').length
-  const totalIn = data.data.reduce((acc, s) => acc + (s.input_octets || 0), 0)
-  const totalOut = data.data.reduce((acc, s) => acc + (s.output_octets || 0), 0)
+  const totalDown = data.data.reduce((acc, s) => acc + (s.output_octets || 0), 0)
+  const totalUp = data.data.reduce((acc, s) => acc + (s.input_octets || 0), 0)
+
+  const handleKick = (sessionId: string) => {
+    disconnectMutation.mutate(sessionId, {
+      onSuccess: (res) => {
+        setConfirmKickId(null)
+        if (res.coa_sent) {
+          toast.success(res.message)
+        } else {
+          toast.warning(res.message)
+        }
+      },
+      onError: (err: Error) => {
+        toast.error(err.message || 'Gagal memutus sesi pengguna')
+      },
+    })
+  }
 
   return (
     <div>
       <WavyHeader
-        title="Sesi RADIUS"
+        title="Sesi Aktif & Riwayat RADIUS"
+        actions={
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw size={15} className={isFetching ? 'animate-spin' : ''} />
+            Segarkan
+          </button>
+        }
       />
 
       <div className="stitch-page-stage">
-        {/* Telemetry KPI Cards from Stitch */}
         <KpiGrid columns={4}>
           <KpiCard
             label="Sesi Pengguna Online"
@@ -49,9 +83,9 @@ export function SessionsPage() {
             icon={Smartphone}
             iconColor="#10b981"
             iconBoxVariant="success"
-            trend={{ label: 'Terhubung', variant: 'success' }}
-            footerLeft="Layanan Autentikasi Aktif"
-            footerRight="Waktu Nyata"
+            trend={{ label: 'Live', variant: 'success' }}
+            footerLeft="Autentikasi RADIUS Aktif"
+            footerRight="Auto 30 dtk"
           />
 
           <KpiCard
@@ -60,53 +94,65 @@ export function SessionsPage() {
             icon={AlertTriangle}
             iconColor="#f59e0b"
             iconBoxVariant="warning"
-            trend={{ label: 'Butuh CoA', variant: 'warning' }}
-            footerLeft="Keepalive Miss > 3m"
-            footerRight="Auto Cleanup Hook"
+            trend={{ label: 'Idle', variant: 'warning' }}
+            footerLeft="Interim-Update terhenti"
+            footerRight="Auto Janitor"
           />
 
           <KpiCard
-            label="Total Traffic Download"
-            value={formatBytes(totalIn)}
+            label="Total Download"
+            value={formatBytes(totalDown)}
             icon={Download}
-            trend={{ label: 'Acct-Input' }}
-            footerLeft="Total unduhan klien"
-            footerRight="MikroTik Interface"
+            trend={{ label: 'Acct-Output' }}
+            footerLeft="Unduhan klien pada halaman ini"
+            footerRight="MikroTik Hotspot"
           />
 
           <KpiCard
-            label="Total Traffic Upload"
-            value={formatBytes(totalOut)}
+            label="Total Upload"
+            value={formatBytes(totalUp)}
             icon={Upload}
             iconBoxVariant="secondary"
-            trend={{ label: 'Acct-Output' }}
-            footerLeft="Total unggahan klien"
-            footerRight="MikroTik Interface"
+            trend={{ label: 'Acct-Input' }}
+            footerLeft="Unggahan klien pada halaman ini"
+            footerRight="MikroTik Hotspot"
           />
         </KpiGrid>
 
-        {/* Sessions Table Container */}
         <DataTableCard
-          title="Riwayat Sesi Koneksi Pengguna"
+          title="Daftar Sesi Koneksi Pengguna"
           icon={ArrowLeftRight}
           toolbarActions={
             <div style={{ display: 'flex', gap: '0.65rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <SearchInput
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Cari voucher, NAS, atau MAC..."
-                style={{ width: '240px' }}
+                placeholder="Cari voucher, MAC, atau IP..."
+                style={{ width: '220px' }}
               />
+
+              <select
+                value={query.router_id || ''}
+                onChange={(e) => setFilter('router_id', e.target.value)}
+                style={{ padding: '0.65rem 0.85rem' }}
+              >
+                <option value="">Semua Router</option>
+                {routers.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
 
               <select
                 value={query.status || ''}
                 onChange={(e) => setFilter('status', e.target.value)}
                 style={{ padding: '0.65rem 0.85rem' }}
               >
-                <option value="">Semua Status Sesi</option>
-                <option value="ACTIVE">Active (Live Online)</option>
-                <option value="CLOSED">Closed (Selesai/Logout)</option>
-                <option value="STALE">Stale (Koneksi Putus)</option>
+                <option value="">Semua Status</option>
+                <option value="ACTIVE">Active (Online)</option>
+                <option value="CLOSED">Closed (Selesai)</option>
+                <option value="STALE">Stale (Terputus)</option>
               </select>
             </div>
           }
@@ -117,43 +163,49 @@ export function SessionsPage() {
                 <table className="stitch-table">
                   <thead>
                     <tr>
-                      <th>Router / NAS MikroTik</th>
-                      <th>Kredensial Sesi (Voucher)</th>
-                      <th>Perangkat Klien (MAC / IP)</th>
-                      <th>Status Sesi RADIUS</th>
-                      <th>Waktu Mulai &amp; Durasi</th>
-                      <th>Konsumsi Traffic</th>
+                      <th>Router / Lokasi</th>
+                      <th>Voucher</th>
+                      <th>Perangkat (MAC / IP)</th>
+                      <th>Status</th>
+                      <th>Mulai &amp; Uptime</th>
+                      <th>Traffic (Down / Up)</th>
+                      <th style={{ textAlign: 'right' }}>Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.data.map((x) => {
                       const isActive = x.status === 'ACTIVE'
+                      const isConfirming = confirmKickId === x.id
                       return (
                         <tr key={x.id}>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <Router size={18} style={{ color: '#00668a', flexShrink: 0 }} />
+                              <Router size={17} style={{ color: '#00668a', flexShrink: 0 }} />
                               <div>
                                 <strong style={{ fontSize: '13px', color: '#0b1c30' }}>
-                                  {x.nas_identifier || 'MikroTik-Gateway'}
+                                  {x.router_name || x.nas_identifier || 'MikroTik-Gateway'}
                                 </strong>
                                 <br />
-                                <small style={{ color: '#64748b', fontSize: '11px' }}>
-                                  Acct-ID: {x.acct_session_id?.substring(0, 12) || '—'}
+                                <small style={{ color: '#64748b', fontSize: '11px', fontFamily: 'monospace' }}>
+                                  {x.nas_identifier}
                                 </small>
                               </div>
                             </div>
                           </td>
 
                           <td>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <code style={{ fontSize: '13px', background: '#eff4ff', color: '#1d4ed8', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, width: 'fit-content' }}>
-                                {x.username}
-                              </code>
-                              <span style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                                Akses Terverifikasi
-                              </span>
-                            </div>
+                            <code
+                              style={{
+                                fontSize: '13px',
+                                background: '#eff4ff',
+                                color: '#1d4ed8',
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {x.username}
+                            </code>
                           </td>
 
                           <td>
@@ -174,6 +226,11 @@ export function SessionsPage() {
                             >
                               {x.status}
                             </StatusPill>
+                            {x.terminate_cause && (
+                              <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+                                {x.terminate_cause}
+                              </div>
+                            )}
                           </td>
 
                           <td>
@@ -182,7 +239,7 @@ export function SessionsPage() {
                                 {formatDate(x.started_at || x.created_at)}
                               </span>
                               <span style={{ color: '#64748b', fontSize: '11px' }}>
-                                Online: {formatDuration(x.session_time_seconds)}
+                                Uptime: {formatDuration(x.session_time_seconds)}
                               </span>
                             </div>
                           </td>
@@ -196,6 +253,50 @@ export function SessionsPage() {
                                 <ArrowUp size={11} /> {formatBytes(x.input_octets)}
                               </span>
                             </div>
+                          </td>
+
+                          <td style={{ textAlign: 'right' }}>
+                            {isActive ? (
+                              isConfirming ? (
+                                <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-danger"
+                                    style={{ padding: '0.35rem 0.65rem', fontSize: '11px' }}
+                                    disabled={disconnectMutation.isPending}
+                                    onClick={() => handleKick(x.id)}
+                                  >
+                                    {disconnectMutation.isPending ? 'Memutus...' : 'Ya, Putus'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.35rem 0.6rem', fontSize: '11px' }}
+                                    onClick={() => setConfirmKickId(null)}
+                                  >
+                                    Batal
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{
+                                    padding: '0.4rem 0.7rem',
+                                    fontSize: '12px',
+                                    color: '#b91c1c',
+                                    borderColor: '#fecaca',
+                                    background: '#fef2f2',
+                                  }}
+                                  onClick={() => setConfirmKickId(x.id)}
+                                >
+                                  <PowerOff size={13} />
+                                  Putuskan
+                                </button>
+                              )
+                            ) : (
+                              <span style={{ fontSize: '11px', color: '#94a3b8' }}>—</span>
+                            )}
                           </td>
                         </tr>
                       )

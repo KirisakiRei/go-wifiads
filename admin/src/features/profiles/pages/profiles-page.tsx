@@ -14,6 +14,7 @@ import {
   Save,
   Sparkles,
   Timer,
+  Trash2,
   Upload,
   Wifi,
   X,
@@ -29,7 +30,7 @@ import {
   StatusPill,
   WavyHeader,
 } from '@/components/ui'
-import { formatDuration } from '@/lib/formatters'
+import { formatBytes, formatDuration } from '@/lib/formatters'
 import { profilesApi } from '@/features/profiles/api/profiles.api'
 import { profilesQueryKey, useProfiles } from '@/features/profiles/hooks/use-profiles'
 import type { ConnectProfile, UpdateProfilePayload } from '@/features/profiles/types/profile.types'
@@ -86,6 +87,8 @@ interface ProfileEditState {
   downKbps: number
   upKbps: number
   timeoutSeconds: number
+  quotaMB: string
+  sharedUsers: number
   isActive: boolean
 }
 
@@ -108,17 +111,22 @@ function ProfileInlineEditor({
     downKbps: profile.bandwidth_down_kbps,
     upKbps: profile.bandwidth_up_kbps,
     timeoutSeconds: profile.session_timeout_seconds,
+    quotaMB: profile.quota_bytes && profile.quota_bytes > 0 ? String(Math.round(profile.quota_bytes / (1024 * 1024))) : '',
+    sharedUsers: profile.shared_users || 1,
     isActive: profile.is_active,
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    const quotaMbNum = Number(form.quotaMB)
     onSave({
       display_name: form.displayName,
       description: form.description,
       bandwidth_down_kbps: Number(form.downKbps),
       bandwidth_up_kbps: Number(form.upKbps),
       session_timeout_seconds: Number(form.timeoutSeconds),
+      quota_bytes: quotaMbNum > 0 ? Math.round(quotaMbNum * 1024 * 1024) : 0,
+      shared_users: Math.max(1, Number(form.sharedUsers) || 1),
       is_default: profile.is_default,
       is_active: form.isActive,
     })
@@ -235,6 +243,29 @@ function ProfileInlineEditor({
               presets={DURATION_PRESETS}
               required
             />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <div className="form-field">
+                <label>Kuota Data (MB)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={form.quotaMB}
+                  onChange={(e) => setForm({ ...form, quotaMB: e.target.value })}
+                  placeholder="Kosong = Unlimited"
+                />
+              </div>
+              <div className="form-field">
+                <label>Shared Users</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={form.sharedUsers}
+                  onChange={(e) => setForm({ ...form, sharedUsers: Number(e.target.value) })}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -646,6 +677,9 @@ export function ProfilesPage() {
   const [createDown, setCreateDown] = useState(5120)
   const [createUp, setCreateUp] = useState(2048)
   const [createTimeout, setCreateTimeout] = useState(7200)
+  const [createQuotaMB, setCreateQuotaMB] = useState('')
+  const [createSharedUsers, setCreateSharedUsers] = useState(1)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const createMutation = useMutation({
     mutationFn: profilesApi.create,
@@ -674,6 +708,18 @@ export function ProfilesPage() {
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: profilesApi.delete,
+    onSuccess: () => {
+      toast.success('Profil paket berhasil dihapus')
+      queryClient.invalidateQueries({ queryKey: profilesQueryKey })
+      setConfirmDeleteId(null)
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Gagal menghapus profil paket')
+    },
+  })
+
   if (isPending) return <LoadingState />
   if (error || !profiles) return <ErrorState message="Gagal memuat daftar paket internet." />
 
@@ -683,6 +729,7 @@ export function ProfilesPage() {
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    const quotaMbNum = Number(createQuotaMB)
     createMutation.mutate({
       name: createName.trim().toLowerCase().replace(/\s+/g, '-'),
       display_name: createDisplayName,
@@ -690,6 +737,8 @@ export function ProfilesPage() {
       bandwidth_down_kbps: Number(createDown) || 1024,
       bandwidth_up_kbps: Number(createUp) || 512,
       session_timeout_seconds: Number(createTimeout) || 3600,
+      quota_bytes: quotaMbNum > 0 ? Math.round(quotaMbNum * 1024 * 1024) : 0,
+      shared_users: Math.max(1, Number(createSharedUsers) || 1),
       is_default: false,
       is_active: true,
     })
@@ -886,6 +935,29 @@ export function ProfilesPage() {
                       min={60}
                       max={604800}
                     />
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                      <div className="form-field">
+                        <label>Kuota Data (MB)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={createQuotaMB}
+                          onChange={(e) => setCreateQuotaMB(e.target.value)}
+                          placeholder="Kosong = Unlimited"
+                        />
+                      </div>
+                      <div className="form-field">
+                        <label>Shared Users</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={createSharedUsers}
+                          onChange={(e) => setCreateSharedUsers(Number(e.target.value))}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -932,7 +1004,7 @@ export function ProfilesPage() {
                   <th style={{ minWidth: '240px' }}>Nama Paket</th>
                   <th>Batas Unduh</th>
                   <th>Batas Unggah</th>
-                  <th>Durasi Sesi</th>
+                  <th>Durasi &amp; Kuota</th>
                   <th style={{ textAlign: 'center' }}>Status</th>
                   <th style={{ textAlign: 'right' }}>Aksi</th>
                 </tr>
@@ -1005,9 +1077,15 @@ export function ProfilesPage() {
                         </td>
 
                         <td style={{ whiteSpace: 'nowrap' }}>
-                          <span style={{ fontSize: '14px', fontWeight: 700, color: '#0b1c30' }}>
-                            {liveDescDuration(p.session_timeout_seconds)}
-                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 700, color: '#0b1c30' }}>
+                              {liveDescDuration(p.session_timeout_seconds)}
+                            </span>
+                            <small style={{ fontSize: '11px', color: '#64748b' }}>
+                              {p.quota_bytes && p.quota_bytes > 0 ? `Kuota ${formatBytes(p.quota_bytes)}` : 'Kuota Unlimited'}
+                              {p.shared_users && p.shared_users > 1 ? ` • ${p.shared_users} perangkat` : ''}
+                            </small>
+                          </div>
                         </td>
 
                         <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
@@ -1019,21 +1097,59 @@ export function ProfilesPage() {
                         </td>
 
                         <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            style={{
-                              padding: '0.4rem 0.85rem',
-                              fontSize: '12px',
-                              background: isExpanded ? '#1d4ed8' : '#eff6ff',
-                              color: isExpanded ? '#ffffff' : '#1d4ed8',
-                              borderColor: isExpanded ? '#1d4ed8' : '#bfdbfe',
-                            }}
-                            onClick={() => handleToggle(p.id)}
-                          >
-                            {isExpanded ? <ChevronUp size={14} /> : <Pencil size={14} />}
-                            {isExpanded ? 'Tutup' : 'Edit'}
-                          </button>
+                          <div style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{
+                                padding: '0.4rem 0.85rem',
+                                fontSize: '12px',
+                                background: isExpanded ? '#1d4ed8' : '#eff6ff',
+                                color: isExpanded ? '#ffffff' : '#1d4ed8',
+                                borderColor: isExpanded ? '#1d4ed8' : '#bfdbfe',
+                              }}
+                              onClick={() => handleToggle(p.id)}
+                            >
+                              {isExpanded ? <ChevronUp size={14} /> : <Pencil size={14} />}
+                              {isExpanded ? 'Tutup' : 'Edit'}
+                            </button>
+                            {confirmDeleteId === p.id ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn btn-danger"
+                                  style={{ padding: '0.4rem 0.7rem', fontSize: '11px' }}
+                                  disabled={deleteMutation.isPending}
+                                  onClick={() => deleteMutation.mutate(p.id)}
+                                >
+                                  Hapus
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.4rem 0.6rem', fontSize: '11px' }}
+                                  onClick={() => setConfirmDeleteId(null)}
+                                >
+                                  Batal
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{
+                                  padding: '0.4rem 0.55rem',
+                                  color: '#b91c1c',
+                                  borderColor: '#fecaca',
+                                  background: '#fef2f2',
+                                }}
+                                title="Hapus Profil"
+                                onClick={() => setConfirmDeleteId(p.id)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
 

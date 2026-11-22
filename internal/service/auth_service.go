@@ -77,6 +77,50 @@ func (s *authService) Profile(ctx context.Context, adminID string) (*dto.AdminRe
 	return &response, nil
 }
 
+const refreshTokenTTL = 7 * 24 * time.Hour
+
+func (s *authService) IssueRefreshToken(ctx context.Context, adminID string) (string, error) {
+	admin, err := s.repo.FindByID(ctx, adminID)
+	if err != nil {
+		return "", err
+	}
+	if !admin.IsActive {
+		return "", apperror.ErrForbidden
+	}
+	return utils.GenerateJWT(s.jwtSecret, s.jwtIssuer+":refresh", admin.ID, admin.Username, admin.Role, refreshTokenTTL)
+}
+
+func (s *authService) Refresh(ctx context.Context, refreshToken string) (*dto.LoginResponse, string, error) {
+	if refreshToken == "" {
+		return nil, "", apperror.ErrUnauthorized
+	}
+	claims, err := utils.ParseJWT(s.jwtSecret, refreshToken)
+	if err != nil || claims.Issuer != s.jwtIssuer+":refresh" {
+		return nil, "", apperror.ErrUnauthorized
+	}
+	admin, err := s.repo.FindByID(ctx, claims.Subject)
+	if err != nil {
+		return nil, "", apperror.ErrUnauthorized
+	}
+	if !admin.IsActive {
+		return nil, "", apperror.ErrForbidden
+	}
+	accessToken, err := utils.GenerateJWT(s.jwtSecret, s.jwtIssuer, admin.ID, admin.Username, admin.Role, s.jwtTTL)
+	if err != nil {
+		return nil, "", err
+	}
+	newRefresh, err := utils.GenerateJWT(s.jwtSecret, s.jwtIssuer+":refresh", admin.ID, admin.Username, admin.Role, refreshTokenTTL)
+	if err != nil {
+		return nil, "", err
+	}
+	now := time.Now().UTC()
+	return &dto.LoginResponse{
+		Token:     accessToken,
+		ExpiresAt: now.Add(s.jwtTTL).Format(time.RFC3339),
+		User:      toAdminResponse(admin),
+	}, newRefresh, nil
+}
+
 func toAdminResponse(admin *model.AdminUser) dto.AdminResponse {
 	return dto.AdminResponse{
 		ID:       admin.ID,

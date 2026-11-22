@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"wifiads/internal/middleware"
 	"wifiads/internal/service"
 	"wifiads/pkg/httpx"
+	"wifiads/pkg/media"
 	"wifiads/pkg/storage"
 )
 
@@ -173,8 +175,29 @@ func (h *AdvertisementHandler) UploadImage(c *gin.Context) {
 		categoryFolder = "videos"
 	}
 
-	filename := uuid.NewString() + ext
 	contentType := detectMediaContentType(ext)
+	var posterBytes []byte
+	videoDurationSec := 0
+	transcoded := false
+	if isVideo {
+		processed, pErr := media.ProcessVideo(c.Request.Context(), data, ext, 60)
+		if pErr != nil {
+			if errors.Is(pErr, media.ErrVideoTooLong) {
+				httpx.Error(c, http.StatusBadRequest, "VIDEO_TOO_LONG", pErr.Error(), nil)
+				return
+			}
+		} else if processed != nil {
+			data = processed.VideoBytes
+			ext = processed.Ext
+			contentType = processed.ContentType
+			posterBytes = processed.PosterBytes
+			videoDurationSec = processed.DurationSeconds
+			transcoded = processed.Transcoded
+		}
+	}
+
+	baseID := uuid.NewString()
+	filename := baseID + ext
 	objectKey := path.Join(ownerPrefix, categoryFolder, filename)
 
 	// 1. Primary Storage: Upload to Cloudflare R2 if configured
@@ -194,6 +217,19 @@ func (h *AdvertisementHandler) UploadImage(c *gin.Context) {
 		return
 	}
 
+	posterURL := ""
+	if len(posterBytes) > 0 {
+		posterKey := path.Join(ownerPrefix, "thumbnails", baseID+".jpg")
+		if h.r2 != nil && h.r2.Enabled() {
+			_ = h.r2.PutObject(c.Request.Context(), posterKey, posterBytes, "image/jpeg")
+		}
+		localPosterPath := filepath.Join(".", "uploads", filepath.FromSlash(posterKey))
+		if mkErr := os.MkdirAll(filepath.Dir(localPosterPath), 0o755); mkErr == nil {
+			_ = os.WriteFile(localPosterPath, posterBytes, 0o644)
+		}
+		posterURL = "/uploads/" + posterKey
+	}
+
 	mediaType := "image"
 	if isVideo {
 		mediaType = "video"
@@ -206,11 +242,14 @@ func (h *AdvertisementHandler) UploadImage(c *gin.Context) {
 	}
 
 	httpx.Created(c, "File media berhasil diunggah ke Cloudflare R2", gin.H{
-		"url":        imageURL,
-		"r2_url":     r2URL,
-		"object_key": objectKey,
-		"filename":   filename,
-		"media_type": mediaType,
+		"url":              imageURL,
+		"r2_url":           r2URL,
+		"poster_url":       posterURL,
+		"object_key":       objectKey,
+		"filename":         filename,
+		"media_type":       mediaType,
+		"duration_seconds": videoDurationSec,
+		"transcoded":       transcoded,
 	})
 }
 

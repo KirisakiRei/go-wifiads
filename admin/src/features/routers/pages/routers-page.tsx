@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   Activity,
   ArrowDown,
@@ -10,17 +11,21 @@ import {
   Router,
   Smartphone,
   Terminal,
+  Trash2,
   Wifi,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { EmptyState } from '@/components/feedback/query-state'
 import { KpiCard, KpiGrid, WavyHeader } from '@/components/ui'
-import { useRouters } from '@/features/routers/use-routers'
+import { useDeleteRouter, useRouters } from '@/features/routers/use-routers'
 import { formatBytes, formatDate } from '@/lib/formatters'
 
 export function RoutersPage() {
   const navigate = useNavigate()
   const { data: routers = [], isLoading, refetch, isFetching } = useRouters()
+  const deleteMutation = useDeleteRouter()
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   if (isLoading) {
     return (
@@ -31,10 +36,22 @@ export function RoutersPage() {
     )
   }
 
-  const connectedRouters = routers.filter((r) => r.is_connected).length
+  const onlineRouters = routers.filter((r) => r.is_online).length
   const totalOnlineUsers = routers.reduce((acc, r) => acc + (r.active_sessions_count || 0), 0)
   const totalTrafficDown = routers.reduce((acc, r) => acc + (r.total_output_octets || 0), 0)
   const totalTrafficUp = routers.reduce((acc, r) => acc + (r.total_input_octets || 0), 0)
+
+  const handleDelete = (routerId: string, routerName: string) => {
+    deleteMutation.mutate(routerId, {
+      onSuccess: () => {
+        setConfirmDeleteId(null)
+        toast.success(`Router "${routerName}" berhasil dihapus`)
+      },
+      onError: (err: Error) => {
+        toast.error(err.message || 'Gagal menghapus router')
+      },
+    })
+  }
 
   return (
     <div>
@@ -74,12 +91,12 @@ export function RoutersPage() {
           />
 
           <KpiCard
-            label="Router Terhubung"
-            value={connectedRouters}
+            label="Router Online"
+            value={onlineRouters}
             icon={Wifi}
             iconColor="#10b981"
             iconBoxVariant="success"
-            subtext="Aktif berkomunikasi"
+            subtext="Aktif < 5 menit terakhir"
           />
 
           <KpiCard
@@ -122,7 +139,13 @@ export function RoutersPage() {
             }}
           >
             {routers.map((r) => {
+              const isOnline = Boolean(r.is_online)
               const isConnected = Boolean(r.is_connected)
+              const statusBg = isOnline ? '#dcfce7' : isConnected ? '#f1f5f9' : '#fef3c7'
+              const statusColor = isOnline ? '#166534' : isConnected ? '#475569' : '#92400e'
+              const statusDot = isOnline ? '#16a34a' : isConnected ? '#64748b' : '#f59e0b'
+              const statusLabel = isOnline ? 'Online' : isConnected ? 'Offline' : 'Belum Terhubung'
+              const isConfirmingDelete = confirmDeleteId === r.id
               return (
                 <div
                   key={r.id}
@@ -195,8 +218,8 @@ export function RoutersPage() {
                           borderRadius: '999px',
                           fontSize: '11px',
                           fontWeight: 700,
-                          background: isConnected ? '#dcfce7' : '#fef3c7',
-                          color: isConnected ? '#166534' : '#92400e',
+                          background: statusBg,
+                          color: statusColor,
                           whiteSpace: 'nowrap',
                         }}
                       >
@@ -205,10 +228,10 @@ export function RoutersPage() {
                             width: '7px',
                             height: '7px',
                             borderRadius: '50%',
-                            background: isConnected ? '#16a34a' : '#f59e0b',
+                            background: statusDot,
                           }}
                         />
-                        {isConnected ? 'Terhubung' : 'Belum Terhubung'}
+                        {statusLabel}
                       </span>
                     </div>
 
@@ -278,30 +301,78 @@ export function RoutersPage() {
                       paddingTop: '1rem',
                       borderTop: '1px solid #f1f5f9',
                       display: 'flex',
+                      flexWrap: 'wrap',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      gap: '0.75rem',
+                      gap: '0.55rem',
                     }}
                   >
                     <button
                       type="button"
                       className="btn btn-secondary"
-                      style={{ flex: 1, fontSize: '12px', padding: '0.6rem 0.85rem' }}
+                      style={{ fontSize: '12px', padding: '0.55rem 0.75rem' }}
+                      onClick={() => navigate(`/sessions?router_id=${r.id}`)}
+                    >
+                      <Activity size={13} />
+                      Sesi Aktif
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: '12px', padding: '0.55rem 0.75rem' }}
                       onClick={() => navigate(`/routers/${r.id}`)}
                     >
-                      <Terminal size={14} />
-                      Script MikroTik
+                      <Terminal size={13} />
+                      Script
                     </button>
 
                     <button
                       type="button"
                       className="btn btn-primary"
-                      style={{ flex: 1, fontSize: '12px', padding: '0.6rem 0.85rem' }}
+                      style={{ flex: 1, fontSize: '12px', padding: '0.55rem 0.85rem' }}
                       onClick={() => navigate(`/routers/${r.id}`)}
                     >
-                      Atur Router
-                      <ArrowRight size={14} />
+                      Atur
+                      <ArrowRight size={13} />
                     </button>
+
+                    {isConfirmingDelete ? (
+                      <div style={{ display: 'flex', gap: '0.35rem', width: '100%', marginTop: '0.35rem' }}>
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          style={{ flex: 1, fontSize: '12px', padding: '0.45rem 0.75rem' }}
+                          disabled={deleteMutation.isPending}
+                          onClick={() => handleDelete(r.id, r.name)}
+                        >
+                          {deleteMutation.isPending ? 'Menghapus...' : 'Konfirmasi Hapus'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ fontSize: '12px', padding: '0.45rem 0.75rem' }}
+                          onClick={() => setConfirmDeleteId(null)}
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{
+                          padding: '0.55rem 0.65rem',
+                          color: '#b91c1c',
+                          borderColor: '#fecaca',
+                          background: '#fef2f2',
+                        }}
+                        title="Hapus Router"
+                        onClick={() => setConfirmDeleteId(r.id)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
               )
