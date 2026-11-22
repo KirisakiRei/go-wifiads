@@ -25,6 +25,7 @@ type PublicLocationItem struct {
 	EstimatedDailyViews int64    `json:"estimated_daily_views"`
 	ImagePriceIDR       int64    `json:"image_price_idr"`
 	VideoPriceIDR       int64    `json:"video_price_idr"`
+	IsConnected         bool     `json:"is_connected"`
 }
 
 type PublicLandingStats struct {
@@ -44,14 +45,16 @@ type PublicLandingDataResponse struct {
 // ==================== PARTNER LEADS (PUBLIC SUBMIT + ADMIN MANAGE) ====================
 
 type SubmitPartnerLeadRequest struct {
-	VenueName            string `json:"venue_name" binding:"required,min=2,max=150"`
-	Category             string `json:"category" binding:"omitempty,max=64"`
-	City                 string `json:"city" binding:"required,min=2,max=100"`
-	Address              string `json:"address" binding:"omitempty,max=255"`
-	DailyTrafficEstimate int    `json:"daily_traffic_estimate" binding:"required,min=1,max=100000"`
-	ContactName          string `json:"contact_name" binding:"required,min=2,max=120"`
-	WhatsApp             string `json:"whatsapp" binding:"required,min=8,max=32"`
-	Notes                string `json:"notes" binding:"omitempty,max=1000"`
+	VenueName            string   `json:"venue_name" binding:"required,min=2,max=150"`
+	Category             string   `json:"category" binding:"omitempty,max=64"`
+	City                 string   `json:"city" binding:"required,min=2,max=100"`
+	Address              string   `json:"address" binding:"omitempty,max=255"`
+	Latitude             *float64 `json:"latitude" binding:"omitempty,gte=-90,lte=90"`
+	Longitude            *float64 `json:"longitude" binding:"omitempty,gte=-180,lte=180"`
+	DailyTrafficEstimate int      `json:"daily_traffic_estimate" binding:"required,min=1,max=100000"`
+	ContactName          string   `json:"contact_name" binding:"required,min=2,max=120"`
+	WhatsApp             string   `json:"whatsapp" binding:"required,min=8,max=32"`
+	Notes                string   `json:"notes" binding:"omitempty,max=1000"`
 }
 
 type PartnerLeadResponse struct {
@@ -60,6 +63,8 @@ type PartnerLeadResponse struct {
 	Category             string    `json:"category"`
 	City                 string    `json:"city"`
 	Address              string    `json:"address"`
+	Latitude             *float64  `json:"latitude,omitempty"`
+	Longitude            *float64  `json:"longitude,omitempty"`
 	DailyTrafficEstimate int       `json:"daily_traffic_estimate"`
 	ContactName          string    `json:"contact_name"`
 	WhatsApp             string    `json:"whatsapp"`

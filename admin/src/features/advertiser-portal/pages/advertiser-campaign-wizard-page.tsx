@@ -7,11 +7,14 @@ import {
   CheckCircle2,
   Clock,
   CloudUpload,
+  Crosshair,
+  ExternalLink,
+  FileText,
   Film,
   Image as ImageIcon,
-  MapPin,
   Save,
   Send,
+  Users,
   Wallet,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -97,6 +100,10 @@ export function AdvertiserCampaignWizardPage() {
   const [selectedRouterIds, setSelectedRouterIds] = useState<string[]>([])
   const [routerSearch, setRouterSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [tierFilter, setTierFilter] = useState('')
+  const [onlineOnly, setOnlineOnly] = useState(false)
+  const [focusRouterId, setFocusRouterId] = useState<string | null>(null)
+  const [focusSeq, setFocusSeq] = useState(0)
 
   // Step 3: Schedule & Budget
   const [startDate, setStartDate] = useState('')
@@ -148,7 +155,7 @@ export function AdvertiserCampaignWizardPage() {
   const baseImgPrice = configData?.setting.base_price_image_idr || 50
   const baseVidPrice = configData?.setting.base_price_video_idr || 50
 
-  const buildPayload = () => ({
+  const buildPayload = (saveAsDraft = false) => ({
     title: title.trim(),
     body: body.trim(),
     image_url: mediaUrl,
@@ -164,15 +171,22 @@ export function AdvertiserCampaignWizardPage() {
     active_days: selectedDays.join(','),
     daily_budget_idr: Number(dailyBudget) || 0,
     total_budget_idr: Number(totalBudget) || 0,
+    save_as_draft: saveAsDraft,
   })
 
   const submitMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (saveAsDraft: boolean) =>
       isEdit && id
-        ? advertiserApi.updateCampaign(id, buildPayload())
-        : advertiserApi.createCampaign(buildPayload()),
-    onSuccess: (saved) => {
-      toast.success(isEdit ? 'Perubahan iklan berhasil disimpan!' : 'Iklan berhasil diajukan!')
+        ? advertiserApi.updateCampaign(id, buildPayload(saveAsDraft))
+        : advertiserApi.createCampaign(buildPayload(saveAsDraft)),
+    onSuccess: (saved, saveAsDraft) => {
+      toast.success(
+        saveAsDraft
+          ? 'Iklan disimpan sebagai Draft! Anda bisa melanjutkannya kapan saja.'
+          : isEdit
+            ? 'Perubahan iklan berhasil disimpan!'
+            : 'Iklan berhasil diajukan!'
+      )
       queryClient.invalidateQueries({ queryKey: ['adv-campaigns'] })
       queryClient.invalidateQueries({ queryKey: ['adv-campaign', saved.id] })
       queryClient.invalidateQueries({ queryKey: ['adv-overview'] })
@@ -182,6 +196,14 @@ export function AdvertiserCampaignWizardPage() {
       toast.error(err.message || (isEdit ? 'Gagal menyimpan perubahan iklan' : 'Gagal mengajukan iklan')),
   })
 
+  const availableTiers = useMemo(() => {
+    const set = new Set<string>()
+    mapRouters.forEach((r) => {
+      if (r.tier_name) set.add(r.tier_name)
+    })
+    return Array.from(set).sort()
+  }, [mapRouters])
+
   const filteredRouters = useMemo(() => {
     return mapRouters.filter((r) => {
       const q = routerSearch.toLowerCase()
@@ -190,13 +212,20 @@ export function AdvertiserCampaignWizardPage() {
         r.name.toLowerCase().includes(q) ||
         (r.location_address || '').toLowerCase().includes(q)
       const matchCat = !categoryFilter || r.venue_category === categoryFilter
-      return matchSearch && matchCat
+      const matchTier = !tierFilter || r.tier_name === tierFilter
+      const matchOnline = !onlineOnly || r.is_connected
+      return matchSearch && matchCat && matchTier && matchOnline
     })
-  }, [mapRouters, routerSearch, categoryFilter])
+  }, [mapRouters, routerSearch, categoryFilter, tierFilter, onlineOnly])
 
   const selectedRouters = useMemo(
     () => mapRouters.filter((r) => selectedRouterIds.includes(r.id)),
     [mapRouters, selectedRouterIds]
+  )
+
+  const totalEstimatedDailyVisitors = useMemo(
+    () => selectedRouters.reduce((sum, r) => sum + (r.avg_daily_visitors || 0), 0),
+    [selectedRouters]
   )
 
   const pricingSummary = useMemo(() => {
@@ -337,7 +366,12 @@ export function AdvertiserCampaignWizardPage() {
 
   const handleSubmitFinal = () => {
     if (!validateBeforeStep(4)) return
-    submitMutation.mutate()
+    submitMutation.mutate(false)
+  }
+
+  const handleSaveDraft = () => {
+    if (!validateBeforeStep(4)) return
+    submitMutation.mutate(true)
   }
 
   const livePreviewUrl = localPreviewUrl || mediaUrl
@@ -665,18 +699,54 @@ export function AdvertiserCampaignWizardPage() {
                   </p>
                 </div>
 
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  style={{ padding: '0.5rem 0.75rem', fontSize: '12px' }}
-                >
-                  <option value="">Semua Kategori</option>
-                  <option value="Kafe">Kafe</option>
-                  <option value="Restoran">Restoran</option>
-                  <option value="Coworking">Coworking</option>
-                  <option value="Kampus">Kampus</option>
-                  <option value="Area Publik">Area Publik</option>
-                </select>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    style={{ padding: '0.45rem 0.65rem', fontSize: '12px' }}
+                  >
+                    <option value="">Semua Kategori</option>
+                    <option value="Kafe">Kafe</option>
+                    <option value="Restoran">Restoran</option>
+                    <option value="Coworking">Coworking</option>
+                    <option value="Kampus">Kampus</option>
+                    <option value="Area Publik">Area Publik</option>
+                  </select>
+                  <select
+                    value={tierFilter}
+                    onChange={(e) => setTierFilter(e.target.value)}
+                    style={{ padding: '0.45rem 0.65rem', fontSize: '12px' }}
+                  >
+                    <option value="">Semua Rank / Tier</option>
+                    {availableTiers.map((t) => (
+                      <option key={t} value={t}>
+                        Rank {t}
+                      </option>
+                    ))}
+                  </select>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#0f172a',
+                      cursor: 'pointer',
+                      padding: '0.38rem 0.65rem',
+                      borderRadius: '8px',
+                      background: onlineOnly ? '#ecfdf5' : '#f8fafc',
+                      border: `1px solid ${onlineOnly ? '#a7f3d0' : '#e2e8f0'}`,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={onlineOnly}
+                      onChange={(e) => setOnlineOnly(e.target.checked)}
+                    />
+                    Hanya Online
+                  </label>
+                </div>
               </div>
 
               <RouterClusterMap
@@ -684,6 +754,8 @@ export function AdvertiserCampaignWizardPage() {
                 selectedIds={selectedRouterIds}
                 mediaType={mediaType}
                 onToggleSelect={toggleRouter}
+                focusRouterId={focusRouterId}
+                focusSeq={focusSeq}
                 height={430}
               />
             </div>
@@ -693,14 +765,17 @@ export function AdvertiserCampaignWizardPage() {
               className="stitch-card-container"
               style={{ background: '#ffffff', padding: '1.35rem', display: 'grid', gap: '0.9rem' }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <strong style={{ fontSize: '14px', color: '#0f172a' }}>
                   Daftar Lokasi ({selectedRouterIds.length} dipilih)
                 </strong>
                 <div style={{ display: 'flex', gap: '0.4rem' }}>
                   <button
                     type="button"
-                    onClick={() => setSelectedRouterIds(filteredRouters.map((r) => r.id))}
+                    onClick={() => {
+                      const merged = new Set([...selectedRouterIds, ...filteredRouters.map((r) => r.id)])
+                      setSelectedRouterIds(Array.from(merged))
+                    }}
                     style={{
                       border: 'none',
                       background: '#eff6ff',
@@ -712,7 +787,7 @@ export function AdvertiserCampaignWizardPage() {
                       cursor: 'pointer',
                     }}
                   >
-                    Pilih Semua
+                    {categoryFilter || tierFilter || onlineOnly ? 'Pilih Sesuai Filter' : 'Pilih Semua'}
                   </button>
                   {selectedRouterIds.length > 0 && (
                     <button
@@ -733,6 +808,27 @@ export function AdvertiserCampaignWizardPage() {
                     </button>
                   )}
                 </div>
+              </div>
+
+              {/* Estimated Daily Visitors Summary Strip */}
+              <div
+                style={{
+                  background: '#f0f9ff',
+                  border: '1px solid #bae6fd',
+                  borderRadius: '10px',
+                  padding: '0.6rem 0.85rem',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: '12px',
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#0369a1', fontWeight: 600 }}>
+                  <Users size={14} /> Est. Total Pengunjung / Hari
+                </span>
+                <strong style={{ color: '#0c4a6e', fontSize: '13.5px' }}>
+                  {totalEstimatedDailyVisitors.toLocaleString('id-ID')} perangkat
+                </strong>
               </div>
 
               <SearchInput
@@ -772,11 +868,20 @@ export function AdvertiserCampaignWizardPage() {
                     >
                       <div style={{ minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <MapPin size={14} color={selected ? '#2563eb' : '#64748b'} />
+                          <span
+                            title={r.is_connected ? 'Router Online' : 'Router Offline'}
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              background: r.is_connected ? '#10b981' : '#ef4444',
+                              flexShrink: 0,
+                            }}
+                          />
                           <strong style={{ fontSize: '13px', color: '#0f172a' }}>{r.name}</strong>
                         </div>
                         <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                          {r.venue_category} • Rank {r.tier_name} ({r.multiplier}x)
+                          {r.venue_category} • Rank {r.tier_name} ({r.multiplier}x) • ~{r.avg_daily_visitors}/hari
                         </div>
                         {r.location_address && (
                           <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '1px' }}>
@@ -784,12 +889,37 @@ export function AdvertiserCampaignWizardPage() {
                           </div>
                         )}
                       </div>
-
-                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <strong style={{ fontSize: '13px', color: '#1d4ed8', display: 'block' }}>
-                          {formatRupiah(unitPrice)}
-                        </strong>
-                        <span style={{ fontSize: '10px', color: '#64748b' }}>per tayang</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <strong style={{ fontSize: '13px', color: '#1d4ed8', display: 'block' }}>
+                            {formatRupiah(unitPrice)}
+                          </strong>
+                          <span style={{ fontSize: '10px', color: '#64748b' }}>per tayang</span>
+                        </div>
+                        {r.latitude != null && r.longitude != null && (
+                          <button
+                            type="button"
+                            title="Fokus ke lokasi ini di peta"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setFocusRouterId(r.id)
+                              setFocusSeq((s) => s + 1)
+                            }}
+                            style={{
+                              border: '1px solid #cbd5e1',
+                              background: '#ffffff',
+                              color: '#1d4ed8',
+                              borderRadius: '8px',
+                              padding: '5px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <Crosshair size={14} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   )
@@ -969,6 +1099,34 @@ export function AdvertiserCampaignWizardPage() {
                 </div>
               </div>
 
+              {/* Quick Budget Presets */}
+              <div style={{ display: 'grid', gap: '0.45rem' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+                  Pilih Cepat Total Anggaran:
+                </span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {[100000, 250000, 500000, 1000000, 2000000].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setTotalBudget(amt)}
+                      style={{
+                        padding: '0.35rem 0.7rem',
+                        borderRadius: '999px',
+                        border: totalBudget === amt ? '1.5px solid #1d4ed8' : '1px solid #cbd5e1',
+                        background: totalBudget === amt ? '#eff6ff' : '#ffffff',
+                        color: totalBudget === amt ? '#1d4ed8' : '#334155',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {formatRupiah(amt)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Budget Inputs */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
                 <div className="form-field">
@@ -982,7 +1140,6 @@ export function AdvertiserCampaignWizardPage() {
                   />
                   <span className="helper-text">Isi 0 jika tidak dibatasi per hari.</span>
                 </div>
-
                 <div className="form-field">
                   <label>Total Anggaran Iklan (Rp)</label>
                   <input
@@ -995,6 +1152,53 @@ export function AdvertiserCampaignWizardPage() {
                   <span className="helper-text">Iklan berhenti otomatis saat batas ini tercapai.</span>
                 </div>
               </div>
+
+              {(advertiser?.wallet_balance_idr || 0) <
+                Math.max(pricingSummary.minPrice, totalBudget > 0 ? totalBudget : 0) && (
+                <div
+                  style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    color: '#92400e',
+                    padding: '0.8rem 1rem',
+                    borderRadius: '10px',
+                    fontSize: '12.5px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '0.6rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <Wallet size={16} style={{ flexShrink: 0 }} />
+                    <span>
+                      Saldo dompet saat ini{' '}
+                      <strong>{formatRupiah(advertiser?.wallet_balance_idr || 0)}</strong>
+                      {totalBudget > 0 && (advertiser?.wallet_balance_idr || 0) < totalBudget
+                        ? ` (lebih kecil dari total anggaran ${formatRupiah(totalBudget)})`
+                        : ' (kurang dari tarif minimum tayang)'}
+                      .
+                    </span>
+                  </div>
+                  <a
+                    href="/advertiser/wallet"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-secondary"
+                    style={{
+                      padding: '0.35rem 0.7rem',
+                      fontSize: '11.5px',
+                      background: '#ffffff',
+                      borderColor: '#f59e0b',
+                      color: '#92400e',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Top-Up Saldo <ExternalLink size={12} />
+                  </a>
+                </div>
+              )}
             </div>
 
             {/* Pricing Breakdown & Impression Simulator */}
@@ -1189,7 +1393,8 @@ export function AdvertiserCampaignWizardPage() {
                 </div>
               </div>
 
-              {(advertiser?.wallet_balance_idr || 0) < pricingSummary.minPrice && (
+              {(advertiser?.wallet_balance_idr || 0) <
+                Math.max(pricingSummary.minPrice, totalBudget > 0 ? totalBudget : 0) && (
                 <div
                   style={{
                     background: '#fffbeb',
@@ -1199,17 +1404,37 @@ export function AdvertiserCampaignWizardPage() {
                     borderRadius: '12px',
                     fontSize: '13px',
                     display: 'flex',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
-                    gap: '0.5rem',
+                    flexWrap: 'wrap',
+                    gap: '0.65rem',
                   }}
                 >
-                  <Wallet size={18} style={{ flexShrink: 0 }} />
-                  <span>
-                    Saldo dompet Anda saat ini{' '}
-                    <strong>{formatRupiah(advertiser?.wallet_balance_idr || 0)}</strong>. Anda tetap
-                    dapat menyimpan iklan sekarang, lalu melakukan Top-Up agar iklan mulai
-                    ditayangkan.
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: '220px' }}>
+                    <Wallet size={18} style={{ flexShrink: 0 }} />
+                    <span>
+                      Saldo dompet Anda saat ini{' '}
+                      <strong>{formatRupiah(advertiser?.wallet_balance_idr || 0)}</strong>. Anda
+                      bisa <strong>Simpan sebagai Draft</strong> dulu lalu Top-Up saldo agar iklan
+                      siap tayang.
+                    </span>
+                  </div>
+                  <a
+                    href="/advertiser/wallet"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-secondary"
+                    style={{
+                      padding: '0.4rem 0.75rem',
+                      fontSize: '12px',
+                      background: '#ffffff',
+                      borderColor: '#f59e0b',
+                      color: '#92400e',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Top-Up Saldo <ExternalLink size={13} />
+                  </a>
                 </div>
               )}
             </div>
@@ -1284,20 +1509,31 @@ export function AdvertiserCampaignWizardPage() {
                 Langkah Berikutnya <ArrowRight size={16} />
               </button>
             ) : (
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleSubmitFinal}
-                disabled={submitMutation.isPending || uploading}
-                style={{ padding: '0.75rem 1.5rem', fontWeight: 700 }}
-              >
-                {isEdit ? <Save size={16} /> : <Send size={16} />}
-                {submitMutation.isPending
-                  ? 'Menyimpan...'
-                  : isEdit
-                    ? 'Simpan Perubahan Iklan'
-                    : 'Selesai & Ajukan Iklan'}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleSaveDraft}
+                  disabled={submitMutation.isPending || uploading}
+                >
+                  <FileText size={16} />
+                  Simpan Draft
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSubmitFinal}
+                  disabled={submitMutation.isPending || uploading}
+                  style={{ padding: '0.75rem 1.5rem', fontWeight: 700 }}
+                >
+                  {isEdit ? <Save size={16} /> : <Send size={16} />}
+                  {submitMutation.isPending
+                    ? 'Menyimpan...'
+                    : isEdit
+                      ? 'Simpan Perubahan Iklan'
+                      : 'Selesai & Ajukan Iklan'}
+                </button>
+              </>
             )}
           </div>
         </div>

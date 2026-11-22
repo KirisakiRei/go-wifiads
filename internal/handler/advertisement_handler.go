@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -180,7 +181,13 @@ func (h *AdvertisementHandler) UploadImage(c *gin.Context) {
 	videoDurationSec := 0
 	transcoded := false
 	if isVideo {
-		processed, pErr := media.ProcessVideo(c.Request.Context(), data, ext, 60)
+		trimStart, _ := strconv.ParseFloat(strings.TrimSpace(c.PostForm("trim_start")), 64)
+		trimEnd, _ := strconv.ParseFloat(strings.TrimSpace(c.PostForm("trim_end")), 64)
+		processed, pErr := media.ProcessVideoWithOptions(c.Request.Context(), data, ext, media.ProcessVideoOptions{
+			MaxDurationSec: 60,
+			TrimStartSec:   trimStart,
+			TrimEndSec:     trimEnd,
+		})
 		if pErr != nil {
 			if errors.Is(pErr, media.ErrVideoTooLong) {
 				httpx.Error(c, http.StatusBadRequest, "VIDEO_TOO_LONG", pErr.Error(), nil)

@@ -66,6 +66,8 @@ export function RouterDetailPage() {
 
   // Partner Assignment & Pricing Tier State
   const [partnerId, setPartnerId] = useState<string>('')
+  const [partnerQuery, setPartnerQuery] = useState<string>('')
+  const [partnerDropdownOpen, setPartnerDropdownOpen] = useState<boolean>(false)
   const [locationTierId, setLocationTierId] = useState<string>('')
   const [locationTierAuto, setLocationTierAuto] = useState<boolean>(true)
   const [isPublicMarketplace, setIsPublicMarketplace] = useState<boolean>(true)
@@ -74,6 +76,18 @@ export function RouterDetailPage() {
     () => partnerOptions.find((p) => p.id === partnerId),
     [partnerOptions, partnerId]
   )
+
+  const filteredPartnerOptions = useMemo(() => {
+    const q = partnerQuery.trim().toLowerCase()
+    if (!q) return partnerOptions
+    return partnerOptions.filter(
+      (p) =>
+        p.venue_name.toLowerCase().includes(q) ||
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.venue_category || '').toLowerCase().includes(q) ||
+        (p.address || '').toLowerCase().includes(q)
+    )
+  }, [partnerOptions, partnerQuery])
 
   const [setupMode, setSetupMode] = useState<'existing' | 'full'>('existing')
   const [radiusServerIp, setRadiusServerIp] = useState<string>('13.54.63.73')
@@ -760,35 +774,144 @@ ${fullNetworkSection}
                   Penempatan Lokasi Mitra &amp; Rank Tarif Iklan
                 </label>
 
-                {/* Partner Venue Selector */}
+                {/* Partner Venue Selector (Searchable Combobox) */}
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '11px', padding: '0.9rem 1rem', display: 'grid', gap: '0.55rem' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>
-                    Mitra Pemilik Lokasi (Opsional)
-                  </label>
-                  <select
-                    value={partnerId}
-                    onChange={(e) => setPartnerId(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '0.55rem 0.75rem',
-                      borderRadius: '9px',
-                      border: '1px solid #cbd5e1',
-                      fontSize: '13px',
-                      background: '#ffffff',
-                    }}
-                  >
-                    <option value="">— Belum Dihubungkan ke Mitra —</option>
-                    {partnerOptions.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.venue_name}
-                        {p.status === 'INVITED'
-                          ? ' (Menunggu Aktivasi Mitra)'
-                          : p.name
-                            ? ` — ${p.name}`
-                            : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>
+                      Mitra Pemilik Lokasi (Opsional)
+                    </label>
+                    {partnerId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPartnerId('')
+                          setPartnerQuery('')
+                        }}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          color: '#dc2626',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Lepas Mitra
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      value={
+                        partnerDropdownOpen
+                          ? partnerQuery
+                          : selectedPartner
+                            ? `${selectedPartner.venue_name}${selectedPartner.name ? ` — ${selectedPartner.name}` : ''}`
+                            : partnerQuery
+                      }
+                      onFocus={() => {
+                        setPartnerDropdownOpen(true)
+                        setPartnerQuery('')
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => setPartnerDropdownOpen(false), 160)
+                      }}
+                      onChange={(e) => {
+                        setPartnerQuery(e.target.value)
+                        setPartnerDropdownOpen(true)
+                      }}
+                      placeholder="Ketik nama kafe, mitra, atau alamat untuk mencari..."
+                      style={{
+                        width: '100%',
+                        padding: '0.55rem 0.75rem',
+                        borderRadius: '9px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '13px',
+                        background: '#ffffff',
+                      }}
+                    />
+                    {partnerDropdownOpen && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 4px)',
+                          left: 0,
+                          right: 0,
+                          zIndex: 40,
+                          background: '#ffffff',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '10px',
+                          boxShadow: '0 10px 24px rgba(15,23,42,0.12)',
+                          maxHeight: '220px',
+                          overflowY: 'auto',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            setPartnerId('')
+                            setPartnerQuery('')
+                            setPartnerDropdownOpen(false)
+                          }}
+                          style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '0.5rem 0.75rem',
+                            border: 'none',
+                            borderBottom: '1px solid #f1f5f9',
+                            background: !partnerId ? '#eff6ff' : '#ffffff',
+                            fontSize: '12.5px',
+                            color: '#64748b',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          — Belum Dihubungkan ke Mitra —
+                        </button>
+                        {filteredPartnerOptions.length === 0 ? (
+                          <div style={{ padding: '0.65rem 0.75rem', fontSize: '12px', color: '#94a3b8' }}>
+                            Tidak ada mitra cocok dengan "{partnerQuery}"
+                          </div>
+                        ) : (
+                          filteredPartnerOptions.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault()
+                                setPartnerId(p.id)
+                                setPartnerQuery('')
+                                setPartnerDropdownOpen(false)
+                              }}
+                              style={{
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: '0.55rem 0.75rem',
+                                border: 'none',
+                                borderBottom: '1px solid #f1f5f9',
+                                background: partnerId === p.id ? '#eff6ff' : '#ffffff',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <div style={{ fontWeight: 700, fontSize: '12.5px', color: '#0f172a' }}>
+                                {p.venue_name}{' '}
+                                <span style={{ fontWeight: 500, color: '#64748b', fontSize: '11.5px' }}>
+                                  ({p.venue_category || 'Kafe'})
+                                </span>
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                                {p.status === 'INVITED'
+                                  ? 'Menunggu Aktivasi Mitra'
+                                  : p.name || 'Mitra Aktif'}
+                                {p.address ? ` · ${p.address}` : ''}
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {selectedPartner ? (
                     <div

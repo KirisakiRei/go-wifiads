@@ -1,8 +1,9 @@
 import { useMutation } from '@tanstack/react-query'
-import { CheckCircle2, Send, Store } from 'lucide-react'
+import { ArrowRight, CheckCircle2, MapPin, Megaphone, Send, Store } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
+import { RouterPinPicker } from '@/components/map/router-pin-picker'
 import { publicSiteApi } from '../public.api'
 
 const CATEGORIES = [
@@ -21,6 +22,8 @@ export function DaftarMitraPage() {
   const [category, setCategory] = useState(CATEGORIES[0])
   const [city, setCity] = useState('')
   const [address, setAddress] = useState('')
+  const [latitude, setLatitude] = useState<number | null>(null)
+  const [longitude, setLongitude] = useState<number | null>(null)
   const [dailyTraffic, setDailyTraffic] = useState(100)
   const [contactName, setContactName] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
@@ -34,6 +37,8 @@ export function DaftarMitraPage() {
         category,
         city: city.trim(),
         address: address.trim(),
+        latitude: latitude ?? undefined,
+        longitude: longitude ?? undefined,
         daily_traffic_estimate: Number(dailyTraffic) || 50,
         contact_name: contactName.trim(),
         whatsapp: whatsapp.trim(),
@@ -57,8 +62,88 @@ export function DaftarMitraPage() {
 
   return (
     <section className="pub-section">
-      <div className="pub-container" style={{ maxWidth: '760px' }}>
-        <div style={{ marginBottom: '26px' }}>
+      <div className="pub-container" style={{ maxWidth: '820px' }}>
+        {/* Role Picker (Legacy Onboarding UX adapted cleanly) */}
+        <div className="pub-grid-2" style={{ gap: '14px', marginBottom: '26px' }}>
+          <div
+            className="pub-card"
+            style={{
+              border: '2px solid var(--pub-primary)',
+              background: '#f0f5ff',
+              padding: '18px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px',
+            }}
+          >
+            <div
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '11px',
+                background: 'var(--pub-primary)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <Store size={20} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '14.5px', color: '#0b1c30' }}>
+                Saya Pemilik Lokasi (Mitra)
+              </div>
+              <div style={{ fontSize: '12.5px', color: '#475569' }}>
+                Pasang Wi-Fi iklan & terima bagi hasil otomatis
+              </div>
+            </div>
+          </div>
+
+          <a
+            href="/advertiser/login"
+            className="pub-card pub-card-hover"
+            style={{
+              padding: '18px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '14px',
+              textDecoration: 'none',
+              color: 'inherit',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '11px',
+                  background: '#e0f2fe',
+                  color: '#00668a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Megaphone size={20} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '14.5px', color: '#0b1c30' }}>
+                  Saya Ingin Beriklan
+                </div>
+                <div style={{ fontSize: '12.5px', color: '#475569' }}>
+                  Daftar langsung di Portal Pengiklan mandiri
+                </div>
+              </div>
+            </div>
+            <ArrowRight size={17} color="#0037b0" />
+          </a>
+        </div>
+
+        <div style={{ marginBottom: '22px' }}>
           <span className="pub-eyebrow">
             <Store size={14} /> Formulir Calon Mitra Lokasi
           </span>
@@ -66,8 +151,8 @@ export function DaftarMitraPage() {
             Daftarkan Lokasi Usaha Anda
           </h1>
           <p style={{ color: 'var(--pub-muted)', fontSize: '15px' }}>
-            Isi informasi singkat di bawah ini. Tim kami akan menghubungi via WhatsApp dan
-            mengirimkan tautan undangan aktivasi Portal Mitra.
+            Isi informasi singkat & tandai titik Google Maps lokasi Anda. Tim kami akan menghubungi
+            via WhatsApp beserta link aktivasi Portal Mitra.
           </p>
         </div>
 
@@ -106,6 +191,8 @@ export function DaftarMitraPage() {
                   setSubmittedVenue(null)
                   setVenueName('')
                   setAddress('')
+                  setLatitude(null)
+                  setLongitude(null)
                   setNotes('')
                 }}
               >
@@ -188,6 +275,45 @@ export function DaftarMitraPage() {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="Jl. Merdeka No. 12, Kecamatan..."
+              />
+            </div>
+
+            {/* Optional Map Pin Picker */}
+            <div
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '12px',
+                padding: '14px',
+                display: 'grid',
+                gap: '10px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <MapPin size={15} color="#0037b0" /> Tandai Titik Lokasi di Peta (Opsional)
+                </label>
+                {latitude != null && longitude != null && (
+                  <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#059669' }}>
+                    Koordinat tersimpan ({latitude.toFixed(5)}, {longitude.toFixed(5)})
+                  </span>
+                )}
+              </div>
+              <RouterPinPicker
+                latitude={latitude}
+                longitude={longitude}
+                onChange={(lat, lng) => {
+                  setLatitude(lat)
+                  setLongitude(lng)
+                }}
+                onAddressFound={(addr) => {
+                  if (!address.trim()) setAddress(addr)
+                }}
+                onPlaceNameFound={(place) => {
+                  if (!venueName.trim()) setVenueName(place)
+                }}
+                height={240}
+                accentColor="#0037b0"
               />
             </div>
 

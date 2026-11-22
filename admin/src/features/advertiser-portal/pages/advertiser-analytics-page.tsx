@@ -172,22 +172,26 @@ export function AdvertiserAnalyticsPage() {
             label="Tayangan Periode Ini"
             value={data.total_impressions.toLocaleString('id-ID')}
             icon={Eye}
-            subtext="Ditonton hingga selesai"
+            subtext={`Klik: ${data.total_clicks.toLocaleString('id-ID')} (CTR ${data.ctr_percent}%)`}
+          />
+          <KpiCard
+            label="Tonton Selesai"
+            value={`${data.completion_rate_percent ?? 0}%`}
+            icon={Percent}
+            iconColor="#10b981"
+            iconBoxVariant="success"
+            subtext={
+              (data.total_completions ?? 0) > 0
+                ? `${(data.total_completions ?? 0).toLocaleString('id-ID')} selesai · rata-rata ${data.avg_watch_seconds ?? 0} dtk`
+                : 'Belum ada data selesai tonton'
+            }
           />
           <KpiCard
             label="Klik Promo"
             value={data.total_clicks.toLocaleString('id-ID')}
             icon={MousePointerClick}
             iconBoxVariant="secondary"
-            subtext="Interaksi pengunjung"
-          />
-          <KpiCard
-            label="Rasio Klik (CTR)"
-            value={`${data.ctr_percent}%`}
-            icon={Percent}
-            iconColor="#10b981"
-            iconBoxVariant="success"
-            subtext="Persentase ketertarikan"
+            subtext={`Rasio klik (CTR) ${data.ctr_percent}%`}
           />
           <KpiCard
             label="Biaya Terpakai"

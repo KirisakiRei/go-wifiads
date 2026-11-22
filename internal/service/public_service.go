@@ -138,6 +138,7 @@ func (s *publicService) GetLandingData(ctx context.Context) (*dto.PublicLandingD
 		}
 		imgPrice := int64(math.Round(float64(pricing.BasePriceImageIDR) * mult))
 		vidPrice := int64(math.Round(float64(pricing.BasePriceVideoIDR) * mult))
+		isOnline := r.LastSeenAt != nil && time.Since(*r.LastSeenAt) < 5*time.Minute
 		catSet[strings.ToLower(strings.TrimSpace(category))] = struct{}{}
 
 		locations = append(locations, dto.PublicLocationItem{
@@ -152,6 +153,7 @@ func (s *publicService) GetLandingData(ctx context.Context) (*dto.PublicLandingD
 			EstimatedDailyViews: estViews,
 			ImagePriceIDR:       imgPrice,
 			VideoPriceIDR:       vidPrice,
+			IsConnected:         isOnline,
 		})
 	}
 
@@ -179,6 +181,8 @@ func (s *publicService) SubmitPartnerLead(ctx context.Context, req dto.SubmitPar
 		Category:             cat,
 		City:                 strings.TrimSpace(req.City),
 		Address:              strings.TrimSpace(req.Address),
+		Latitude:             req.Latitude,
+		Longitude:            req.Longitude,
 		DailyTrafficEstimate: req.DailyTrafficEstimate,
 		ContactName:          strings.TrimSpace(req.ContactName),
 		WhatsApp:             strings.TrimSpace(req.WhatsApp),
@@ -296,6 +300,10 @@ func (s *publicService) AdminConvertPartnerLead(
 			if strings.TrimSpace(lead.ContactName) != "" {
 				pModel.Name = lead.ContactName
 			}
+			if lead.Latitude != nil && lead.Longitude != nil {
+				pModel.Latitude = lead.Latitude
+				pModel.Longitude = lead.Longitude
+			}
 			_ = s.partners.UpdatePartner(ctx, pModel)
 		}
 	}
@@ -341,6 +349,8 @@ func toPartnerLeadDTO(l *model.PartnerLead, inviteToken string) dto.PartnerLeadR
 		Category:             l.Category,
 		City:                 l.City,
 		Address:              l.Address,
+		Latitude:             l.Latitude,
+		Longitude:            l.Longitude,
 		DailyTrafficEstimate: l.DailyTrafficEstimate,
 		ContactName:          l.ContactName,
 		WhatsApp:             l.WhatsApp,

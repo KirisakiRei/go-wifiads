@@ -28,10 +28,25 @@ type ProcessedVideo struct {
 	Transcoded      bool
 }
 
+// ProcessVideoOptions configures duration validation and optional server-side trimming.
+type ProcessVideoOptions struct {
+	MaxDurationSec int
+	TrimStartSec   float64
+	TrimEndSec     float64
+}
+
 // ProcessVideo validates duration (via ffprobe) and transcodes to mobile-friendly 720p H.264/AAC +faststart
 // with a 1-second JPG poster thumbnail (via ffmpeg). When ffmpeg/ffprobe are unavailable on the host,
 // it logs a warning and gracefully falls back to the original uploaded bytes.
 func ProcessVideo(ctx context.Context, input []byte, origExt string, maxDurationSec int) (*ProcessedVideo, error) {
+	return ProcessVideoWithOptions(ctx, input, origExt, ProcessVideoOptions{MaxDurationSec: maxDurationSec})
+}
+
+// ProcessVideoWithOptions runs duration check, optional trim (-ss/-to), 720p H.264/AAC +faststart transcode,
+// and poster thumbnail extraction.
+func ProcessVideoWithOptions(ctx context.Context, input []byte, origExt string, opts ProcessVideoOptions) (*ProcessedVideo, error) {
+	maxDurationSec := opts.MaxDurationSec
+	hasTrim := opts.TrimStartSec >= 0 && opts.TrimEndSec > opts.TrimStartSec+0.5
 	ext := strings.ToLower(strings.TrimSpace(origExt))
 	if ext == "" {
 		ext = ".mp4"
@@ -42,59 +57,67 @@ func ProcessVideo(ctx context.Context, input []byte, origExt string, maxDuration
 		ContentType: contentTypeForVideoExt(ext),
 		Transcoded:  false,
 	}
-
 	ffprobePath, probeErr := exec.LookPath("ffprobe")
 	ffmpegPath, ffErr := exec.LookPath("ffmpeg")
 	if probeErr != nil && ffErr != nil {
 		slog.Warn("ffmpeg/ffprobe unavailable; skipping video transcode and keeping original upload")
 		return res, nil
 	}
-
 	tmpDir, err := os.MkdirTemp("", "wifiads-media-*")
 	if err != nil {
 		slog.Warn("failed to create temp dir for video processing", slog.String("error", err.Error()))
 		return res, nil
 	}
 	defer os.RemoveAll(tmpDir)
-
 	inPath := filepath.Join(tmpDir, "input"+ext)
 	if err := os.WriteFile(inPath, input, 0o600); err != nil {
 		slog.Warn("failed to write temp input video", slog.String("error", err.Error()))
 		return res, nil
 	}
-
 	// 1. Probe actual duration when ffprobe is present.
 	if probeErr == nil {
 		pCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		dur, dErr := probeDuration(pCtx, ffprobePath, inPath)
 		cancel()
 		if dErr == nil && dur > 0 {
-			rounded := int(math.Round(dur))
+			effectiveDur := dur
+			if hasTrim {
+				trimEnd := opts.TrimEndSec
+				if trimEnd > dur {
+					trimEnd = dur
+				}
+				if trimEnd > opts.TrimStartSec+0.5 {
+					effectiveDur = trimEnd - opts.TrimStartSec
+				}
+			}
+			rounded := int(math.Round(effectiveDur))
 			if rounded < 1 {
 				rounded = 1
 			}
 			res.DurationSeconds = rounded
-			if maxDurationSec > 0 && dur > float64(maxDurationSec)+1.0 {
+			if maxDurationSec > 0 && effectiveDur > float64(maxDurationSec)+1.0 {
 				return nil, fmt.Errorf("%w (%d detik, maksimal %d detik)", ErrVideoTooLong, rounded, maxDurationSec)
 			}
 		} else if dErr != nil {
 			slog.Warn("ffprobe failed; continuing without duration check", slog.String("error", dErr.Error()))
 		}
 	}
-
 	if ffErr != nil {
 		slog.Warn("ffmpeg unavailable; keeping original video without transcode")
 		return res, nil
 	}
-
 	// 2. Transcode to 720p H.264 + AAC + faststart for iOS/Android CNA compatibility.
 	outPath := filepath.Join(tmpDir, "output.mp4")
 	tCtx, tCancel := context.WithTimeout(ctx, 90*time.Second)
 	defer tCancel()
-	cmd := exec.CommandContext(
-		tCtx,
-		ffmpegPath,
-		"-y",
+	ffArgs := []string{"-y"}
+	if hasTrim {
+		ffArgs = append(ffArgs,
+			"-ss", fmt.Sprintf("%.2f", opts.TrimStartSec),
+			"-to", fmt.Sprintf("%.2f", opts.TrimEndSec),
+		)
+	}
+	ffArgs = append(ffArgs,
 		"-i", inPath,
 		"-vf", "scale='min(1280,iw)':-2",
 		"-c:v", "libx264",
@@ -106,6 +129,7 @@ func ProcessVideo(ctx context.Context, input []byte, origExt string, maxDuration
 		"-movflags", "+faststart",
 		outPath,
 	)
+	cmd := exec.CommandContext(tCtx, ffmpegPath, ffArgs...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {

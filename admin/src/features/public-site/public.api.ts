@@ -30,6 +30,7 @@ export interface PublicLocationItem {
   estimated_daily_views: number
   image_price_idr: number
   video_price_idr: number
+  is_connected: boolean
 }
 
 export interface PublicLandingData {
@@ -49,6 +50,8 @@ export interface SubmitPartnerLeadPayload {
   category: string
   city: string
   address?: string
+  latitude?: number
+  longitude?: number
   daily_traffic_estimate: number
   contact_name: string
   whatsapp: string

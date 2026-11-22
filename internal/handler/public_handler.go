@@ -30,6 +30,16 @@ func (h *PublicHandler) GetLandingData(c *gin.Context) {
 	httpx.OK(c, "Landing data fetched", res)
 }
 
+func (h *PublicHandler) GetPublicMapRouters(c *gin.Context) {
+	res, err := h.svc.GetLandingData(c.Request.Context())
+	if err != nil {
+		status, code := apperror.MapHTTPStatus(err)
+		httpx.Error(c, status, code, err.Error(), nil)
+		return
+	}
+	httpx.OK(c, "Public map routers fetched", res.Locations)
+}
+
 func (h *PublicHandler) SubmitPartnerLead(c *gin.Context) {
 	var req dto.SubmitPartnerLeadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

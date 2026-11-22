@@ -597,10 +597,13 @@ func (s *marketplaceService) CreateCampaign(ctx context.Context, advertiserID st
 	}
 
 	initialStatus := model.AdStatusActive
-	if v.setting.RequireAdApproval {
+	isActive := true
+	if req.SaveAsDraft {
+		initialStatus = model.AdStatusDraft
+		isActive = false
+	} else if v.setting.RequireAdApproval {
 		initialStatus = model.AdStatusPendingReview
 	}
-
 	now := time.Now().UTC()
 	advID := advertiserID
 	ad := &model.Advertisement{
@@ -614,7 +617,7 @@ func (s *marketplaceService) CreateCampaign(ctx context.Context, advertiserID st
 		LayoutMode:      strings.ToLower(strings.TrimSpace(req.LayoutMode)),
 		DurationSeconds: req.DurationSeconds,
 		Status:          initialStatus,
-		IsActive:        true,
+		IsActive:        isActive,
 		StartDate:       v.startDate,
 		EndDate:         v.endDate,
 		StartHour:       v.startHour,
@@ -656,12 +659,16 @@ func (s *marketplaceService) UpdateCampaign(ctx context.Context, advertiserID, c
 		ad.TargetURL != v.targetURL ||
 		!strings.EqualFold(ad.MediaType, newMediaType)
 
-	if ad.Status == model.AdStatusRejected {
+	if req.SaveAsDraft {
+		ad.Status = model.AdStatusDraft
+		ad.IsActive = false
+	} else if ad.Status == model.AdStatusDraft || ad.Status == model.AdStatusRejected {
 		if v.setting.RequireAdApproval {
 			ad.Status = model.AdStatusPendingReview
 		} else {
 			ad.Status = model.AdStatusActive
 		}
+		ad.IsActive = true
 		ad.RejectionReason = ""
 	} else if creativeChanged && v.setting.RequireAdApproval {
 		ad.Status = model.AdStatusPendingReview
@@ -1038,13 +1045,43 @@ func (s *marketplaceService) GetAdvertiserAnalytics(ctx context.Context, adverti
 		totalCTR = math.Round((float64(totalClicks)*100.0/float64(totalImp))*10) / 10
 	}
 
+	// Aggregate video completion & watch-time metrics across advertiser's campaigns (or filtered campaign).
+	var totalCompletions, totalWatchSec, totalCampImps int64
+	if query.CampaignID != "" {
+		if c, cErr := s.repo.FindCampaignByID(ctx, query.CampaignID); cErr == nil && c != nil && c.AdvertiserID != nil && *c.AdvertiserID == advertiserID {
+			totalCompletions = c.CompletionsCount
+			totalWatchSec = c.TotalWatchSeconds
+			totalCampImps = c.ImpressionsCount
+		}
+	} else if camps, _, cErr := s.repo.ListCampaigns(ctx, repository.CampaignFilter{Page: 1, PerPage: 200, AdvertiserID: advertiserID}); cErr == nil {
+		for _, c := range camps {
+			totalCompletions += c.CompletionsCount
+			totalWatchSec += c.TotalWatchSeconds
+			totalCampImps += c.ImpressionsCount
+		}
+	}
+	completionRate := 0.0
+	if totalCampImps > 0 && totalCompletions > 0 {
+		completionRate = math.Round((float64(totalCompletions)*100.0/float64(totalCampImps))*10) / 10
+		if completionRate > 100 {
+			completionRate = 100
+		}
+	}
+	avgWatchSec := 0.0
+	if totalCompletions > 0 {
+		avgWatchSec = math.Round((float64(totalWatchSec)/float64(totalCompletions))*10) / 10
+	}
+
 	return &dto.AdvertiserAnalyticsResponse{
-		TotalImpressions: totalImp,
-		TotalClicks:      totalClicks,
-		CTRPercent:       totalCTR,
-		TotalSpentIDR:    totalSpent,
-		Series:           series,
-		ByRouter:         byRouter,
+		TotalImpressions:      totalImp,
+		TotalClicks:           totalClicks,
+		CTRPercent:            totalCTR,
+		TotalCompletions:      totalCompletions,
+		CompletionRatePercent: completionRate,
+		AvgWatchSeconds:       avgWatchSec,
+		TotalSpentIDR:         totalSpent,
+		Series:                series,
+		ByRouter:              byRouter,
 	}, nil
 }
 
@@ -1311,34 +1348,37 @@ func (s *marketplaceService) enrichCampaignResponses(ctx context.Context, ads []
 		}
 
 		out = append(out, dto.CampaignResponse{
-			ID:                 a.ID,
-			AdvertiserID:       advID,
-			AdvertiserName:     advName,
-			AdvertiserCompany:  advCompany,
-			Title:              a.Title,
-			Body:               a.Body,
-			ImageURL:           normalizeAdMediaURL(a.ImageURL),
-			TargetURL:          a.TargetURL,
-			MediaType:          a.MediaType,
-			LayoutMode:         a.LayoutMode,
-			DurationSeconds:    a.DurationSeconds,
-			Status:             a.Status,
-			IsActive:           a.IsActive,
-			RejectionReason:    a.RejectionReason,
-			StartDate:          a.StartDate,
-			EndDate:            a.EndDate,
-			StartHour:          a.StartHour,
-			EndHour:            a.EndHour,
-			ActiveDays:         a.ActiveDays,
-			DailyBudgetIDR:     a.DailyBudgetIDR,
-			TotalBudgetIDR:     a.TotalBudgetIDR,
-			SpentAmountIDR:     a.SpentAmountIDR,
-			DailySpentTodayIDR: dailySpentMap[a.ID],
-			ImpressionsCount:   a.ImpressionsCount,
-			ClicksCount:        a.ClicksCount,
-			TargetRouters:      rSummaries,
-			CreatedAt:          a.CreatedAt,
-			UpdatedAt:          a.UpdatedAt,
+			ID:                    a.ID,
+			AdvertiserID:          advID,
+			AdvertiserName:        advName,
+			AdvertiserCompany:     advCompany,
+			Title:                 a.Title,
+			Body:                  a.Body,
+			ImageURL:              normalizeAdMediaURL(a.ImageURL),
+			TargetURL:             a.TargetURL,
+			MediaType:             a.MediaType,
+			LayoutMode:            a.LayoutMode,
+			DurationSeconds:       a.DurationSeconds,
+			Status:                a.Status,
+			IsActive:              a.IsActive,
+			RejectionReason:       a.RejectionReason,
+			StartDate:             a.StartDate,
+			EndDate:               a.EndDate,
+			StartHour:             a.StartHour,
+			EndHour:               a.EndHour,
+			ActiveDays:            a.ActiveDays,
+			DailyBudgetIDR:        a.DailyBudgetIDR,
+			TotalBudgetIDR:        a.TotalBudgetIDR,
+			SpentAmountIDR:        a.SpentAmountIDR,
+			DailySpentTodayIDR:    dailySpentMap[a.ID],
+			ImpressionsCount:      a.ImpressionsCount,
+			ClicksCount:           a.ClicksCount,
+			CompletionsCount:      a.CompletionsCount,
+			CompletionRatePercent: calcCompletionRate(a.CompletionsCount, a.ImpressionsCount),
+			AvgWatchSeconds:       calcAvgWatchSec(a.TotalWatchSeconds, a.CompletionsCount),
+			TargetRouters:         rSummaries,
+			CreatedAt:             a.CreatedAt,
+			UpdatedAt:             a.UpdatedAt,
 		})
 	}
 	return out, nil
@@ -1487,4 +1527,22 @@ func toTopupInvoiceDTO(inv *model.TopupInvoice, adv *model.Advertiser) dto.Topup
 		res.AdvertiserCompany = adv.CompanyName
 	}
 	return res
+}
+
+func calcCompletionRate(completions, impressions int64) float64 {
+	if impressions <= 0 || completions <= 0 {
+		return 0
+	}
+	rate := math.Round((float64(completions)*100.0/float64(impressions))*10) / 10
+	if rate > 100 {
+		return 100
+	}
+	return rate
+}
+
+func calcAvgWatchSec(totalWatchSeconds, completions int64) float64 {
+	if completions <= 0 || totalWatchSeconds <= 0 {
+		return 0
+	}
+	return math.Round((float64(totalWatchSeconds)/float64(completions))*10) / 10
 }

@@ -82,6 +82,7 @@ export function AdvertisementFormPage() {
   // Video Trimmer State (Start & End in seconds)
   const [videoStart, setVideoStart] = useState<number>(0)
   const [videoEnd, setVideoEnd] = useState<number>(15)
+  const lastVideoFileRef = useRef<File | null>(null)
   const [videoCurrentTime, setVideoCurrentTime] = useState<number>(0)
   const videoPlayerRef = useRef<HTMLVideoElement>(null)
 
@@ -143,6 +144,12 @@ export function AdvertisementFormPage() {
       img.src = objURL
     }
 
+    const isVid = file.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(file.name)
+    if (isVid) {
+      lastVideoFileRef.current = file
+    } else {
+      lastVideoFileRef.current = null
+    }
     try {
       setUploading(true)
       setUploadCompleted(false)
@@ -663,7 +670,7 @@ export function AdvertisementFormPage() {
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <button
                           type="button"
                           className="btn btn-secondary"
@@ -678,6 +685,43 @@ export function AdvertisementFormPage() {
                           <Play size={14} />
                           Putar Pratinjau ({videoStart}s - {videoEnd}s)
                         </button>
+                        {lastVideoFileRef.current && videoEnd > videoStart + 0.5 && (
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={uploading}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '12px' }}
+                            onClick={async () => {
+                              const file = lastVideoFileRef.current
+                              if (!file) return
+                              try {
+                                setUploading(true)
+                                setUploadPercent(0)
+                                const res = await advertisementsApi.uploadImage(
+                                  file,
+                                  (p) => {
+                                    setUploadedBytes(p.loaded)
+                                    setTotalBytes(p.total)
+                                    setUploadPercent(p.percent)
+                                  },
+                                  { trimStart: videoStart, trimEnd: videoEnd }
+                                )
+                                setImageUrl(res.url)
+                                setDurationSeconds(Math.max(1, Math.round(videoEnd - videoStart)))
+                                setUploadPercent(100)
+                                setUploadCompleted(true)
+                                toast.success(`Video berhasil dipotong (${videoStart}s–${videoEnd}s) & di-transcode!`)
+                              } catch (err: unknown) {
+                                toast.error(err instanceof Error ? err.message : 'Gagal memotong video')
+                              } finally {
+                                setUploading(false)
+                              }
+                            }}
+                          >
+                            <Scissors size={14} />
+                            Potong &amp; Simpan Klip ({videoStart}s–{videoEnd}s)
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="btn btn-secondary"

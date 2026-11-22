@@ -285,6 +285,7 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 	pub := api.Group("/public")
 	{
 		pub.GET("/landing-data", middleware.RateLimit(60, 0), publicHandler.GetLandingData)
+		pub.GET("/routers/map", middleware.RateLimit(60, 0), publicHandler.GetPublicMapRouters)
 		pub.POST("/partner-leads", middleware.RateLimit(10, 0), publicHandler.SubmitPartnerLead)
 	}
 

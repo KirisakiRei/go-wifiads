@@ -641,6 +641,24 @@ export function AdminPartnersPage() {
                             {lead.address && (
                               <div style={{ color: '#64748b', fontSize: '11.5px' }}>{lead.address}</div>
                             )}
+                            {lead.latitude != null && lead.longitude != null && (
+                              <a
+                                href={`https://www.google.com/maps?q=${lead.latitude},${lead.longitude}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  fontSize: '11px',
+                                  color: '#1d4ed8',
+                                  marginTop: '2px',
+                                  textDecoration: 'none',
+                                }}
+                              >
+                                <MapPin size={11} /> Lihat di Peta
+                              </a>
+                            )}
                           </td>
                           <td style={{ fontSize: '12.5px' }}>
                             <div style={{ fontWeight: 500 }}>{lead.contact_name}</div>

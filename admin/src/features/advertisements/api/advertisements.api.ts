@@ -26,11 +26,16 @@ export const advertisementsApi = {
     apiClient<void>(`/api/v1/admin/advertisements/${id}`, { method: 'DELETE' }),
   uploadImage: (
     file: File,
-    onProgress?: (info: UploadProgressInfo) => void
+    onProgress?: (info: UploadProgressInfo) => void,
+    options?: { trimStart?: number; trimEnd?: number }
   ): Promise<UploadMediaResult> => {
     return new Promise((resolve, reject) => {
       const formData = new FormData()
       formData.append('image', file)
+      if (options && typeof options.trimEnd === 'number' && options.trimEnd > (options.trimStart ?? 0) + 0.5) {
+        formData.append('trim_start', String(Math.max(0, options.trimStart ?? 0)))
+        formData.append('trim_end', String(options.trimEnd))
+      }
 
       const xhr = new XMLHttpRequest()
       xhr.open('POST', `${env.apiBaseUrl}/api/v1/admin/advertisements/upload`, true)

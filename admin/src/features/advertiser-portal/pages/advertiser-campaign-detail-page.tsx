@@ -180,7 +180,11 @@ export function AdvertiserCampaignDetailPage() {
             label="Total Tayangan"
             value={campaign.impressions_count.toLocaleString('id-ID')}
             icon={Eye}
-            subtext={`Durasi ${campaign.duration_seconds} detik per tayang`}
+            subtext={
+              (campaign.completions_count ?? 0) > 0
+                ? `Selesai ${campaign.completion_rate_percent ?? 0}% · rata-rata ${campaign.avg_watch_seconds ?? 0} dtk`
+                : `Durasi ${campaign.duration_seconds} detik per tayang`
+            }
           />
           <KpiCard
             label="Klik Promo"

@@ -140,6 +140,8 @@ var partnerMigrations = []string{
 	`ALTER TABLE app.connect_profiles ADD COLUMN IF NOT EXISTS shared_users integer NOT NULL DEFAULT 1`,
 	`ALTER TABLE app.advertisements ADD COLUMN IF NOT EXISTS completions_count bigint NOT NULL DEFAULT 0`,
 	`ALTER TABLE app.advertisements ADD COLUMN IF NOT EXISTS total_watch_seconds bigint NOT NULL DEFAULT 0`,
+	`ALTER TABLE app.partner_leads ADD COLUMN IF NOT EXISTS latitude double precision`,
+	`ALTER TABLE app.partner_leads ADD COLUMN IF NOT EXISTS longitude double precision`,
 }
 
 // restoreGormIDRColumns repairs IDR columns renamed by the earlier `_id_r` -> `_idr`

@@ -154,34 +154,37 @@ type CampaignRouterSummary struct {
 }
 
 type CampaignResponse struct {
-	ID                 string                  `json:"id"`
-	AdvertiserID       string                  `json:"advertiser_id"`
-	AdvertiserName     string                  `json:"advertiser_name,omitempty"`
-	AdvertiserCompany  string                  `json:"advertiser_company,omitempty"`
-	Title              string                  `json:"title"`
-	Body               string                  `json:"body"`
-	ImageURL           string                  `json:"image_url"`
-	TargetURL          string                  `json:"target_url"`
-	MediaType          string                  `json:"media_type"`
-	LayoutMode         string                  `json:"layout_mode"`
-	DurationSeconds    int                     `json:"duration_seconds"`
-	Status             string                  `json:"status"`
-	IsActive           bool                    `json:"is_active"`
-	RejectionReason    string                  `json:"rejection_reason,omitempty"`
-	StartDate          *time.Time              `json:"start_date,omitempty"`
-	EndDate            *time.Time              `json:"end_date,omitempty"`
-	StartHour          int                     `json:"start_hour"`
-	EndHour            int                     `json:"end_hour"`
-	ActiveDays         string                  `json:"active_days"`
-	DailyBudgetIDR     int64                   `json:"daily_budget_idr"`
-	TotalBudgetIDR     int64                   `json:"total_budget_idr"`
-	SpentAmountIDR     int64                   `json:"spent_amount_idr"`
-	DailySpentTodayIDR int64                   `json:"daily_spent_today_idr"`
-	ImpressionsCount   int64                   `json:"impressions_count"`
-	ClicksCount        int64                   `json:"clicks_count"`
-	TargetRouters      []CampaignRouterSummary `json:"target_routers"`
-	CreatedAt          time.Time               `json:"created_at"`
-	UpdatedAt          time.Time               `json:"updated_at"`
+	ID                    string                  `json:"id"`
+	AdvertiserID          string                  `json:"advertiser_id"`
+	AdvertiserName        string                  `json:"advertiser_name,omitempty"`
+	AdvertiserCompany     string                  `json:"advertiser_company,omitempty"`
+	Title                 string                  `json:"title"`
+	Body                  string                  `json:"body"`
+	ImageURL              string                  `json:"image_url"`
+	TargetURL             string                  `json:"target_url"`
+	MediaType             string                  `json:"media_type"`
+	LayoutMode            string                  `json:"layout_mode"`
+	DurationSeconds       int                     `json:"duration_seconds"`
+	Status                string                  `json:"status"`
+	IsActive              bool                    `json:"is_active"`
+	RejectionReason       string                  `json:"rejection_reason,omitempty"`
+	StartDate             *time.Time              `json:"start_date,omitempty"`
+	EndDate               *time.Time              `json:"end_date,omitempty"`
+	StartHour             int                     `json:"start_hour"`
+	EndHour               int                     `json:"end_hour"`
+	ActiveDays            string                  `json:"active_days"`
+	DailyBudgetIDR        int64                   `json:"daily_budget_idr"`
+	TotalBudgetIDR        int64                   `json:"total_budget_idr"`
+	SpentAmountIDR        int64                   `json:"spent_amount_idr"`
+	DailySpentTodayIDR    int64                   `json:"daily_spent_today_idr"`
+	ImpressionsCount      int64                   `json:"impressions_count"`
+	ClicksCount           int64                   `json:"clicks_count"`
+	CompletionsCount      int64                   `json:"completions_count"`
+	CompletionRatePercent float64                 `json:"completion_rate_percent"`
+	AvgWatchSeconds       float64                 `json:"avg_watch_seconds"`
+	TargetRouters         []CampaignRouterSummary `json:"target_routers"`
+	CreatedAt             time.Time               `json:"created_at"`
+	UpdatedAt             time.Time               `json:"updated_at"`
 }
 
 type CreateCampaignRequest struct {
@@ -200,6 +203,7 @@ type CreateCampaignRequest struct {
 	ActiveDays      string   `json:"active_days" binding:"max=32"`
 	DailyBudgetIDR  int64    `json:"daily_budget_idr" binding:"min=0"`
 	TotalBudgetIDR  int64    `json:"total_budget_idr" binding:"min=0"`
+	SaveAsDraft     bool     `json:"save_as_draft"`
 }
 
 type UpdateCampaignRequest struct {
@@ -218,6 +222,7 @@ type UpdateCampaignRequest struct {
 	ActiveDays      string   `json:"active_days" binding:"max=32"`
 	DailyBudgetIDR  int64    `json:"daily_budget_idr" binding:"min=0"`
 	TotalBudgetIDR  int64    `json:"total_budget_idr" binding:"min=0"`
+	SaveAsDraft     bool     `json:"save_as_draft"`
 }
 
 type UpdateCampaignStatusRequest struct {
@@ -351,10 +356,13 @@ type RouterAnalyticsBreakdown struct {
 }
 
 type AdvertiserAnalyticsResponse struct {
-	TotalImpressions int64                      `json:"total_impressions"`
-	TotalClicks      int64                      `json:"total_clicks"`
-	CTRPercent       float64                    `json:"ctr_percent"`
-	TotalSpentIDR    int64                      `json:"total_spent_idr"`
-	Series           []AdvertiserChartPoint     `json:"series"`
-	ByRouter         []RouterAnalyticsBreakdown `json:"by_router"`
+	TotalImpressions      int64                      `json:"total_impressions"`
+	TotalClicks           int64                      `json:"total_clicks"`
+	CTRPercent            float64                    `json:"ctr_percent"`
+	TotalCompletions      int64                      `json:"total_completions"`
+	CompletionRatePercent float64                    `json:"completion_rate_percent"`
+	AvgWatchSeconds       float64                    `json:"avg_watch_seconds"`
+	TotalSpentIDR         int64                      `json:"total_spent_idr"`
+	Series                []AdvertiserChartPoint     `json:"series"`
+	ByRouter              []RouterAnalyticsBreakdown `json:"by_router"`
 }

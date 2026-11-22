@@ -120,6 +120,9 @@ export interface CampaignItem {
   daily_spent_today_idr: number
   impressions_count: number
   clicks_count: number
+  completions_count?: number
+  completion_rate_percent?: number
+  avg_watch_seconds?: number
   target_routers: CampaignRouterSummary[]
   created_at: string
   updated_at: string
@@ -141,6 +144,7 @@ export interface CreateCampaignPayload {
   active_days: string
   daily_budget_idr: number
   total_budget_idr: number
+  save_as_draft?: boolean
 }
 
 export interface TopupInvoiceItem {
@@ -210,6 +214,9 @@ export interface AdvertiserAnalytics {
   total_impressions: number
   total_clicks: number
   ctr_percent: number
+  total_completions?: number
+  completion_rate_percent?: number
+  avg_watch_seconds?: number
   total_spent_idr: number
   series: AdvertiserChartPoint[]
   by_router: RouterAnalyticsBreakdown[]
@@ -440,6 +447,8 @@ export interface PartnerLeadItem {
   category: string
   city: string
   address: string
+  latitude?: number | null
+  longitude?: number | null
   daily_traffic_estimate: number
   contact_name: string
   whatsapp: string
