@@ -160,6 +160,7 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 	{
 		api.GET("/map-geocode", mapTileHandler.SearchPlace)
 		api.POST("/map-resolve-link", mapTileHandler.ResolveGoogleMapsLink)
+		api.GET("/routers/heartbeat", middleware.RateLimit(60, 0), adminHandler.RouterHeartbeat)
 		api.POST("/routers/heartbeat", middleware.RateLimit(60, 0), adminHandler.RouterHeartbeat)
 		api.POST("/portal-sessions", portalHandler.CreateSession)
 		api.GET("/portal-sessions/active", middleware.RateLimit(30, 0), portalHandler.GetActiveSession)

@@ -10,6 +10,7 @@ export interface RouterDevice {
   nas_ip_address?: string
   radius_server_ip?: string
   radius_secret?: string
+  heartbeat_token?: string
   portal_base_url?: string
   status: string
   description?: string

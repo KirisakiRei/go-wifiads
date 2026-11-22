@@ -36,8 +36,8 @@ func main() {
 	user := flag.String("user", defaultUser, "SSH username")
 	pass := flag.String("pass", defaultPass, "SSH password")
 	mode := flag.String("mode", "inspect", "inspect | apply")
+	rawCmd := flag.String("cmd", "", "run single RouterOS command")
 	flag.Parse()
-
 	addr := net.JoinHostPort(*host, *port)
 	client, err := sshConnect(addr, *user, *pass)
 	if err != nil {
@@ -45,6 +45,10 @@ func main() {
 	}
 	defer client.Close()
 	fmt.Printf("✓ Terhubung ke MikroTik %s\n\n", addr)
+	if *rawCmd != "" {
+		fmt.Println(run(client, *rawCmd))
+		return
+	}
 
 	switch *mode {
 	case "inspect":

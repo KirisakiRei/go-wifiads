@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -607,6 +610,7 @@ func (s *adminService) buildRouterResponse(
 		IPAddress:             r.IPAddress,
 		NASIPAddress:          nasIP,
 		RadiusSecret:          radiusSecret,
+		HeartbeatToken:        ComputeRouterHeartbeatToken(r.NASIdentifier, radiusSecret),
 		RadiusServerIP:        s.radiusServerIP,
 		PortalBaseURL:         s.portalBaseURL,
 		Status:                r.Status,
@@ -1331,10 +1335,24 @@ func IsRouterOnline(lastSeen *time.Time) bool {
 	return lastSeen != nil && time.Since(*lastSeen) < RouterOnlineWindow
 }
 
-// RecordRouterHeartbeat verifies the router's NAS secret and updates last_seen_at.
-func (s *adminService) RecordRouterHeartbeat(ctx context.Context, nasIdentifier, secret string) (time.Time, error) {
+// ComputeRouterHeartbeatToken derives a deterministic 128-bit HMAC token for
+// RouterOS /tool fetch HTTP heartbeat without exposing the raw RADIUS secret.
+func ComputeRouterHeartbeatToken(nasIdentifier, secret string) string {
 	nasID := strings.TrimSpace(nasIdentifier)
 	if nasID == "" || secret == "" {
+		return ""
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte("wifiads-heartbeat:" + nasID))
+	return hex.EncodeToString(mac.Sum(nil))[:32]
+}
+
+// RecordRouterHeartbeat verifies either the router's raw secret (HTTPS POST) or its
+// derived HMAC heartbeat token (HTTP GET for legacy RouterOS 5.x) and updates last_seen_at.
+func (s *adminService) RecordRouterHeartbeat(ctx context.Context, nasIdentifier, credential string) (time.Time, error) {
+	nasID := strings.TrimSpace(nasIdentifier)
+	cred := strings.TrimSpace(credential)
+	if nasID == "" || cred == "" {
 		return time.Time{}, apperror.New(apperror.ErrUnauthorized, "invalid router heartbeat credentials")
 	}
 	if s.nasClients == nil || s.routers == nil {
@@ -1344,8 +1362,14 @@ func (s *adminService) RecordRouterHeartbeat(ctx context.Context, nasIdentifier,
 	if err != nil || nas == nil || !nas.IsActive {
 		return time.Time{}, apperror.New(apperror.ErrUnauthorized, "unknown or inactive NAS identifier")
 	}
-	expected, err := utils.DecryptString(s.radiusSecretKey, nas.SecretCiphertext)
-	if err != nil || expected == "" || subtle.ConstantTimeCompare([]byte(expected), []byte(secret)) != 1 {
+	expectedSecret, err := utils.DecryptString(s.radiusSecretKey, nas.SecretCiphertext)
+	if err != nil || expectedSecret == "" {
+		return time.Time{}, apperror.New(apperror.ErrUnauthorized, "invalid router secret")
+	}
+	expectedToken := ComputeRouterHeartbeatToken(nas.NASIdentifier, expectedSecret)
+	secretMatch := len(cred) == len(expectedSecret) && subtle.ConstantTimeCompare([]byte(expectedSecret), []byte(cred)) == 1
+	tokenMatch := expectedToken != "" && len(cred) == len(expectedToken) && subtle.ConstantTimeCompare([]byte(expectedToken), []byte(cred)) == 1
+	if !secretMatch && !tokenMatch {
 		return time.Time{}, apperror.New(apperror.ErrUnauthorized, "invalid router secret")
 	}
 	now := time.Now().UTC()

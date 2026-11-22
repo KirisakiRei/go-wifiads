@@ -54,12 +54,25 @@ func TestRecordRouterHeartbeat(t *testing.T) {
 
 	seenAt, err := svc.RecordRouterHeartbeat(ctx, "wifiads-router", secret)
 	if err != nil {
-		t.Fatalf("RecordRouterHeartbeat failed: %v", err)
+		t.Fatalf("RecordRouterHeartbeat (secret) failed: %v", err)
 	}
 	if routerRepo.router.LastSeenAt == nil || !service.IsRouterOnline(routerRepo.router.LastSeenAt) {
 		t.Fatalf("expected router to be marked online, got LastSeenAt=%v", routerRepo.router.LastSeenAt)
 	}
 	if time.Since(seenAt) > 5*time.Second {
 		t.Fatalf("expected fresh seenAt timestamp, got %v", seenAt)
+	}
+
+	// Verify HMAC token auth (used by RouterOS v5.9 HTTP GET /tool fetch).
+	routerRepo.router.LastSeenAt = nil
+	hbToken := service.ComputeRouterHeartbeatToken("wifiads-router", secret)
+	if len(hbToken) != 32 {
+		t.Fatalf("expected 32-char hex heartbeat token, got %q", hbToken)
+	}
+	if _, err := svc.RecordRouterHeartbeat(ctx, "wifiads-router", hbToken); err != nil {
+		t.Fatalf("RecordRouterHeartbeat (token) failed: %v", err)
+	}
+	if routerRepo.router.LastSeenAt == nil {
+		t.Fatalf("expected LastSeenAt updated via HMAC token")
 	}
 }

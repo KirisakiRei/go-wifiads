@@ -97,6 +97,31 @@ export function RouterDetailPage() {
   const [dnsServers, setDnsServers] = useState<string>('8.8.8.8,1.1.1.1')
   const [copiedRsc, setCopiedRsc] = useState<boolean>(false)
   const [hydratedRouterKey, setHydratedRouterKey] = useState<string>('')
+  const [derivedHeartbeatToken, setDerivedHeartbeatToken] = useState<string>('')
+
+  useEffect(() => {
+    let cancelled = false
+    const nas = nasIdentifier.trim()
+    if (!nas || !radiusSecret || typeof window === 'undefined' || !window.crypto?.subtle) {
+      return
+    }
+    const enc = new TextEncoder()
+    window.crypto.subtle
+      .importKey('raw', enc.encode(radiusSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+      .then((key) => window.crypto.subtle.sign('HMAC', key, enc.encode(`wifiads-heartbeat:${nas}`)))
+      .then((sig) => {
+        if (cancelled) return
+        const hex = Array.from(new Uint8Array(sig))
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')
+          .slice(0, 32)
+        setDerivedHeartbeatToken(hex)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [nasIdentifier, radiusSecret])
 
   useEffect(() => {
     if (isNew) {
@@ -342,13 +367,14 @@ ${fullNetworkSection}
 :local loginHtml "${escapedLoginHtml}"
 /file set [find name="hotspot/login.html"] contents=$loginHtml
 
-# 7. Heartbeat Berkala ke Server (Setiap 2 Menit agar status router tetap Online)
+# 7. Heartbeat Berkala ke Server (Setiap 2 Menit - Kompatibel RouterOS v5/v6/v7)
 /system scheduler remove [find name="wifiads-heartbeat"]
-:local hbUrl "${cleanPortalUrl.replace(/\/portal\/?$/, '')}/api/v1/routers/heartbeat"
-:local hbCmd ("/tool fetch url=\"" . $hbUrl . "\" http-method=post http-data=\"nas_identifier=" . $nasId . "\\nsecret=" . $radiusSecret . "\" keep-result=no")
+:local hbToken "${(currentRouter?.nas_identifier === nasIdentifier.trim() && currentRouter?.heartbeat_token) || derivedHeartbeatToken || radiusSecret}"
+:local hbUrl ("${cleanPortalUrl.replace(/^https:\/\//i, 'http://').replace(/\/portal\/?$/, '')}/api/v1/routers/heartbeat?nasid=" . $nasId . "&token=" . $hbToken)
+:local hbCmd ("/tool fetch url=\"" . $hbUrl . "\" keep-result=no")
 /system scheduler add name="wifiads-heartbeat" interval=2m start-time=startup on-event=$hbCmd
 :do {
-    /tool fetch url=$hbUrl http-method=post http-data=("nas_identifier=" . $nasId . "\nsecret=" . $radiusSecret) keep-result=no
+    /tool fetch url=$hbUrl keep-result=no
 } on-error={}
 
 :put "[+] Konfigurasi selesai."
@@ -358,6 +384,9 @@ ${fullNetworkSection}
     nasIdentifier,
     radiusServerIp,
     radiusSecret,
+    currentRouter?.nas_identifier,
+    currentRouter?.heartbeat_token,
+    derivedHeartbeatToken,
     hotspotIp,
     hotspotInterface,
     hotspotPoolRange,

@@ -31,11 +31,24 @@ func (h *AdminHandler) RouterHeartbeat(c *gin.Context) {
 	var payload struct {
 		NASIdentifier string `json:"nas_identifier"`
 		Secret        string `json:"secret"`
+		Token         string `json:"token"`
 	}
 	nasID := strings.TrimSpace(c.GetHeader("X-NAS-ID"))
-	secret := c.GetHeader("X-NAS-Secret")
+	if nasID == "" {
+		nasID = strings.TrimSpace(c.Query("nasid"))
+	}
+	if nasID == "" {
+		nasID = strings.TrimSpace(c.Query("nas_identifier"))
+	}
+	cred := c.GetHeader("X-NAS-Secret")
+	if cred == "" {
+		cred = strings.TrimSpace(c.Query("token"))
+	}
+	if cred == "" {
+		cred = c.Query("secret")
+	}
 
-	if nasID == "" || secret == "" {
+	if (nasID == "" || cred == "") && c.Request.Body != nil {
 		raw, err := io.ReadAll(io.LimitReader(c.Request.Body, 4096))
 		if err == nil && len(raw) > 0 {
 			trimmed := strings.TrimSpace(string(raw))
@@ -52,6 +65,8 @@ func (h *AdminHandler) RouterHeartbeat(c *gin.Context) {
 						payload.NASIdentifier = strings.TrimSpace(v)
 					case "secret":
 						payload.Secret = strings.TrimRight(v, "\r")
+					case "token":
+						payload.Token = strings.TrimSpace(v)
 					}
 				}
 			}
@@ -59,19 +74,25 @@ func (h *AdminHandler) RouterHeartbeat(c *gin.Context) {
 		if nasID == "" {
 			nasID = strings.TrimSpace(payload.NASIdentifier)
 		}
-		if secret == "" {
-			secret = payload.Secret
+		if cred == "" {
+			cred = strings.TrimSpace(payload.Token)
+		}
+		if cred == "" {
+			cred = payload.Secret
 		}
 	}
 
 	if nasID == "" {
 		nasID = strings.TrimSpace(c.PostForm("nas_identifier"))
 	}
-	if secret == "" {
-		secret = c.PostForm("secret")
+	if cred == "" {
+		cred = strings.TrimSpace(c.PostForm("token"))
+	}
+	if cred == "" {
+		cred = c.PostForm("secret")
 	}
 
-	seenAt, err := h.admin.RecordRouterHeartbeat(c.Request.Context(), nasID, secret)
+	seenAt, err := h.admin.RecordRouterHeartbeat(c.Request.Context(), nasID, cred)
 	if err != nil {
 		writeError(c, err)
 		return
