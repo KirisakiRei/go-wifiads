@@ -1,0 +1,1 @@
+import{x as e}from"./index-CqMlffFs.js";import{t}from"./jsx-runtime-CkXRJ162.js";var n=t();function r(){return(0,n.jsxs)(`section`,{children:[(0,n.jsx)(`h1`,{children:`Halaman tidak ditemukan`}),(0,n.jsx)(e,{to:`/dashboard`,children:`Kembali ke dashboard`})]})}export{r as NotFoundPage};

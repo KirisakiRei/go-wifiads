@@ -1,0 +1,1 @@
+import{n as e,r as t}from"./api-client-N97ipOL9.js";import{n}from"./query-params-So4k16v9.js";var r={list:e=>t(`/api/v1/admin/audit-logs${n(e)}`),filters:()=>e(`/api/v1/admin/audit-logs/filters`),cleanup:(t=90)=>e(`/api/v1/admin/audit-logs/cleanup?days=${t}`,{method:`DELETE`})};export{r as t};

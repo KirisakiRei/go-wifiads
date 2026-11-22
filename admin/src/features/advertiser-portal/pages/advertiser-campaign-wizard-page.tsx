@@ -13,6 +13,7 @@ import {
   Film,
   Image as ImageIcon,
   Save,
+  Scissors,
   Send,
   Users,
   Wallet,
@@ -23,7 +24,13 @@ import { toast } from 'sonner'
 import { queryClient } from '@/app/query-client'
 import { ErrorState, LoadingState } from '@/components/feedback/query-state'
 import { RouterClusterMap } from '@/components/map/router-cluster-map'
-import { AdPortalPreview, SearchInput, WavyHeader } from '@/components/ui'
+import {
+  AdPortalPreview,
+  type ClipRange,
+  ClipTrimmer,
+  SearchInput,
+  WavyHeader,
+} from '@/components/ui'
 import { useCurrentAdvertiser } from '@/features/advertiser-portal/hooks/use-current-advertiser'
 import { advertiserApi } from '@/features/marketplace/marketplace.api'
 import { formatBytes, formatRupiah } from '@/lib/formatters'
@@ -95,6 +102,10 @@ export function AdvertiserCampaignWizardPage() {
   const [uploadedBytes, setUploadedBytes] = useState(0)
   const [totalBytes, setTotalBytes] = useState(0)
   const [uploadedFileName, setUploadedFileName] = useState('')
+  const [pendingVideoFile, setPendingVideoFile] = useState<File | null>(null)
+  const [rawVideoDuration, setRawVideoDuration] = useState<number>(0)
+  const [clipRange, setClipRange] = useState<ClipRange>({ start: 0, end: 15 })
+  const [uploadedTrimKey, setUploadedTrimKey] = useState<string>('')
 
   // Step 2: Router Map Selection
   const [selectedRouterIds, setSelectedRouterIds] = useState<string[]>([])
@@ -264,6 +275,45 @@ export function AdvertiserCampaignWizardPage() {
     return <ErrorState message="Data iklan yang ingin diubah tidak ditemukan." />
   }
 
+  const uploadVideoWithTrim = async (file: File, range: ClipRange, fullDuration: number) => {
+    const kept = Math.max(1, range.end - range.start)
+    const needsTrim = range.start > 0.05 || (fullDuration > 0 && range.end < fullDuration - 0.1)
+    try {
+      setUploading(true)
+      setUploadedFileName(file.name)
+      setTotalBytes(file.size)
+      setUploadedBytes(0)
+      setUploadPercent(0)
+
+      const res = await advertiserApi.uploadMedia(
+        file,
+        (p) => {
+          setUploadedBytes(p.loaded)
+          setTotalBytes(p.total)
+          setUploadPercent(p.percent)
+        },
+        needsTrim ? range : undefined
+      )
+      setUploadPercent(100)
+      setMediaUrl(res.url)
+      const finalDur = Math.min(
+        maxAllowedDuration,
+        Math.max(5, res.duration_seconds || Math.round(kept))
+      )
+      setDurationSeconds(finalDur)
+      setUploadedTrimKey(`${range.start.toFixed(1)}-${range.end.toFixed(1)}`)
+      toast.success(
+        needsTrim
+          ? `Video berhasil dipotong (${kept.toFixed(1)} dtk) & diunggah`
+          : 'Video iklan berhasil diunggah & dioptimalkan'
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Gagal mengunggah video')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const handleFileUpload = async (file: File) => {
     const isVid = file.type.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(file.name)
 
@@ -274,29 +324,49 @@ export function AdvertiserCampaignWizardPage() {
     localBlobRef.current = objURL
     setLocalPreviewUrl(objURL)
     setMediaType(isVid ? 'video' : 'image')
+    setUploadedFileName(file.name)
 
     if (isVid) {
+      // Load locally into ClipTrimmer first so advertiser can trim before uploading.
+      setPendingVideoFile(file)
+      setMediaUrl('')
+      setUploadedTrimKey('')
       const vid = document.createElement('video')
       vid.preload = 'metadata'
       vid.onloadedmetadata = () => {
         const w = vid.videoWidth || 1920
         const h = vid.videoHeight || 1080
-        const dur = Math.min(maxAllowedDuration, Math.max(5, Math.round(vid.duration || 15)))
+        const rawDur = Math.max(1, Number(vid.duration) || 15)
+        const initialEnd = Math.round(Math.min(rawDur, maxAllowedDuration) * 10) / 10
         setLayoutMode(w >= h ? 'landscape' : 'portrait')
-        setDurationSeconds(dur)
+        setRawVideoDuration(rawDur)
+        setClipRange({ start: 0, end: initialEnd })
+        setDurationSeconds(Math.min(maxAllowedDuration, Math.max(5, Math.round(initialEnd))))
+        if (rawDur > maxAllowedDuration) {
+          toast.info(
+            `Durasi video ${rawDur.toFixed(0)} detik (maks ${maxAllowedDuration} dtk). Pilih potongan di Clip Trimmer lalu klik Potong & Unggah.`
+          )
+        }
+      }
+      vid.onerror = () => {
+        toast.error('Tidak dapat membaca metadata video. Coba unggah format MP4.')
       }
       vid.src = objURL
-    } else {
-      const img = new Image()
-      img.onload = () => {
-        setLayoutMode((img.naturalWidth || 1920) >= (img.naturalHeight || 1080) ? 'landscape' : 'portrait')
-      }
-      img.src = objURL
+      return
     }
+
+    // Image file: upload immediately as before.
+    setPendingVideoFile(null)
+    setRawVideoDuration(0)
+    setUploadedTrimKey('')
+    const img = new Image()
+    img.onload = () => {
+      setLayoutMode((img.naturalWidth || 1920) >= (img.naturalHeight || 1080) ? 'landscape' : 'portrait')
+    }
+    img.src = objURL
 
     try {
       setUploading(true)
-      setUploadedFileName(file.name)
       setTotalBytes(file.size)
       setUploadedBytes(0)
       setUploadPercent(0)
@@ -331,10 +401,18 @@ export function AdvertiserCampaignWizardPage() {
     })
   }
 
+  const currentTrimKey = `${clipRange.start.toFixed(1)}-${clipRange.end.toFixed(1)}`
+  const videoNeedsUpload = Boolean(pendingVideoFile) && (!mediaUrl || uploadedTrimKey !== currentTrimKey)
+
   const validateBeforeStep = (targetStep: 1 | 2 | 3 | 4): boolean => {
     if (targetStep > 1) {
       if (!title.trim()) {
         toast.error('Judul iklan wajib diisi')
+        setStep(1)
+        return false
+      }
+      if (videoNeedsUpload) {
+        toast.error('Klik tombol "Potong & Unggah Video" terlebih dahulu sebelum lanjut')
         setStep(1)
         return false
       }
@@ -374,7 +452,7 @@ export function AdvertiserCampaignWizardPage() {
     submitMutation.mutate(true)
   }
 
-  const livePreviewUrl = localPreviewUrl || mediaUrl
+  const livePreviewUrl = mediaUrl && !videoNeedsUpload ? mediaUrl : localPreviewUrl || mediaUrl
 
   return (
     <div>
@@ -453,14 +531,7 @@ export function AdvertiserCampaignWizardPage() {
 
         {/* ==================== STEP 1: UPLOAD CREATIVE ==================== */}
         {step === 1 && (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-              gap: '1.5rem',
-              alignItems: 'start',
-            }}
-          >
+          <div className="adv-wizard-step1-grid">
             <div
               className="stitch-card-container"
               style={{ background: '#ffffff', padding: '1.5rem', display: 'grid', gap: '1.2rem' }}
@@ -527,6 +598,7 @@ export function AdvertiserCampaignWizardPage() {
                   onChange={(e) => {
                     const f = e.target.files?.[0]
                     if (f) handleFileUpload(f)
+                    e.target.value = ''
                   }}
                 />
                 <div
@@ -543,17 +615,77 @@ export function AdvertiserCampaignWizardPage() {
                 </div>
                 <strong style={{ fontSize: '14px', color: '#0f172a', display: 'block' }}>
                   {uploading
-                    ? 'Mengunggah Berkas...'
-                    : mediaUrl
+                    ? 'Memproses & Mengunggah Berkas...'
+                    : mediaUrl || pendingVideoFile
                       ? 'Ganti Berkas Gambar / Video'
                       : 'Klik untuk Memilih Gambar atau Video'}
                 </strong>
                 <span style={{ fontSize: '12px', color: '#64748b' }}>
-                  Gambar (JPG, PNG, WebP maks. 10 MB) • Video (MP4, WebM maks. 50 MB)
+                  Gambar (JPG, PNG, WebP maks. 10 MB) • Video (MP4, WebM, MOV maks. 50 MB — bisa dipotong hingga {maxAllowedDuration} dtk)
                 </span>
               </div>
 
-              {(uploading || mediaUrl) && (
+              {/* Interactive Video Clip Trimmer */}
+              {mediaType === 'video' && pendingVideoFile && localPreviewUrl && rawVideoDuration > 0 && (
+                <div style={{ display: 'grid', gap: '0.75rem' }}>
+                  {rawVideoDuration > maxAllowedDuration && (
+                    <div
+                      style={{
+                        background: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: '10px',
+                        padding: '0.7rem 0.9rem',
+                        fontSize: '12px',
+                        color: '#1e3a8a',
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Video asli berdurasi <strong>{rawVideoDuration.toFixed(1)} detik</strong> (batas maksimal iklan <strong>{maxAllowedDuration} detik</strong>). Geser handle biru atau seret area terpilih untuk memilih bagian terbaik video Anda.
+                    </div>
+                  )}
+
+                  <ClipTrimmer
+                    src={localPreviewUrl}
+                    duration={rawVideoDuration}
+                    value={clipRange}
+                    minLength={Math.min(5, rawVideoDuration)}
+                    maxLength={maxAllowedDuration}
+                    aspectMode={layoutMode}
+                    onChange={(nextRange) => {
+                      setClipRange(nextRange)
+                      const len = Math.round(nextRange.end - nextRange.start)
+                      setDurationSeconds(Math.min(maxAllowedDuration, Math.max(5, len)))
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    className={`btn ${videoNeedsUpload ? 'btn-primary' : 'btn-secondary'} adv-wallet-btn`}
+                    disabled={uploading}
+                    onClick={() => uploadVideoWithTrim(pendingVideoFile, clipRange, rawVideoDuration)}
+                    style={{ width: '100%', padding: '0.75rem 1rem', fontWeight: 700 }}
+                  >
+                    {uploading ? (
+                      <>
+                        <CloudUpload size={16} /> Memotong &amp; Mengunggah ({uploadPercent}%)...
+                      </>
+                    ) : videoNeedsUpload ? (
+                      <>
+                        <Scissors size={16} />
+                        {mediaUrl
+                          ? `Terapkan Potongan Baru & Unggah Ulang (${(clipRange.end - clipRange.start).toFixed(1)} dtk)`
+                          : `Potong & Unggah Video (${(clipRange.end - clipRange.start).toFixed(1)} dtk)`}
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} color="#16a34a" /> Video Potongan Siap Ditayangkan
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {(uploading || (mediaUrl && !videoNeedsUpload)) && (
                 <div
                   style={{
                     background: '#f8fafc',
@@ -584,6 +716,7 @@ export function AdvertiserCampaignWizardPage() {
                   {uploading && (
                     <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '0.35rem' }}>
                       {formatBytes(uploadedBytes)} dari {formatBytes(totalBytes)}
+                      {uploadPercent >= 99 && mediaType === 'video' ? ' — Memotong & mengoptimalkan video di server...' : ''}
                     </div>
                   )}
                   <div
@@ -606,7 +739,7 @@ export function AdvertiserCampaignWizardPage() {
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="adv-wizard-field-row">
                 <div className="form-field">
                   <label>Orientasi Tampilan</label>
                   <select
@@ -637,7 +770,7 @@ export function AdvertiserCampaignWizardPage() {
 
             {/* Right Column: Realistic Live Preview (Desktop 16:9 / Smartphone 9:16) */}
             <div
-              className="stitch-card-container"
+              className="stitch-card-container adv-wizard-preview-card"
               style={{
                 background: '#ffffff',
                 padding: '1.5rem',

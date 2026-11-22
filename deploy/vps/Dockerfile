@@ -24,7 +24,7 @@ RUN go build -trimpath -ldflags="-s -w" -o /out/server  ./cmd/server  && \
 # ca-certificates is needed for outbound HTTPS, tzdata for RADIUS accounting
 # timestamps in the site timezone (SEED_SITE_TIMEZONE).
 FROM alpine:3.21
-RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 wifiads
+RUN apk add --no-cache ca-certificates tzdata ffmpeg && adduser -D -u 10001 wifiads
 WORKDIR /app
 COPY --from=backend /out/server  /app/server
 COPY --from=backend /out/radius  /app/radius

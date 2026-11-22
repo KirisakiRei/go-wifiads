@@ -2182,14 +2182,467 @@ input:focus, select:focus, textarea:focus {
 
 @media (max-width: 960px) {
   .adv-wallet-hero-grid,
-  .adv-wallet-workspace {
+  .adv-wallet-workspace,
+  .adv-wizard-step1-grid {
     grid-template-columns: 1fr;
   }
   .adv-wallet-summary-stack {
     grid-template-rows: auto;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
-  .adv-wallet-guide-card {
-    position: static;
+  .adv-wallet-guide-card,
+  .adv-wizard-preview-card {
+    position: static !important;
+  }
+}
+
+/* ==========================================================================
+   Clip Trimmer (Kokonut-inspired + Emil Design Eng — Responsive Desktop & Mobile)
+   ========================================================================== */
+.adv-wizard-step1-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.adv-wizard-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.clip-trimmer {
+  --trim-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --trim-accent: #1d4ed8;
+  --trim-accent-strong: #1e40af;
+  width: 100%;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: 16px;
+  border: 1px solid #dbeafe;
+  background: #f8fbff;
+  padding: 1rem;
+  display: grid;
+  gap: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.clip-trimmer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.clip-trimmer-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0b1c30;
+}
+
+.clip-trimmer-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.clip-trimmer-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 280px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #0b1c30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clip-trimmer-stage.is-portrait {
+  aspect-ratio: 4 / 3;
+  max-height: 300px;
+}
+
+.clip-trimmer-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: pointer;
+}
+
+.clip-trimmer-clock {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  padding: 0.24rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(11, 28, 48, 0.72);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.clip-trimmer-stage-actions {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.clip-trimmer-icon-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(11, 28, 48, 0.72);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition: transform 150ms var(--trim-ease), background-color 150ms ease;
+}
+
+.clip-trimmer-icon-btn:active {
+  transform: scale(0.95);
+}
+
+.clip-trimmer-track-pad {
+  padding: 0.65rem 1rem 0;
+}
+
+.clip-trimmer-strip {
+  position: relative;
+  height: 54px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.clip-trimmer-filmstrip {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+}
+
+.clip-trimmer-frame {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  border-right: 1px solid rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+
+.clip-trimmer-frame:last-child {
+  border-right: none;
+}
+
+.clip-trimmer-frame-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  display: block;
+}
+
+.clip-trimmer-frame-fallback {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #cbd5e1 0%, #e2e8f0 100%);
+}
+
+.clip-trimmer-dim-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.clip-trimmer-dim-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(248, 250, 252, 0.78);
+  will-change: transform;
+}
+
+.clip-trimmer-playhead-wrap {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 150ms ease-out;
+  will-change: transform;
+}
+
+.clip-trimmer-playhead-wrap.is-hidden {
+  opacity: 0;
+}
+
+.clip-trimmer-playhead-line {
+  position: relative;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-50%);
+  background: #0b1c30;
+  border-radius: 999px;
+}
+
+.clip-trimmer-playhead-dot {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: #0b1c30;
+}
+
+.clip-trimmer-range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-top: 3px solid var(--trim-accent);
+  border-bottom: 3px solid var(--trim-accent);
+  cursor: grab;
+  box-sizing: border-box;
+}
+
+.clip-trimmer-range.is-grabbing {
+  cursor: grabbing;
+}
+
+.clip-trimmer-handle {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--trim-accent);
+  cursor: ew-resize;
+  outline: none;
+  transition: background-color 150ms ease;
+}
+
+.clip-trimmer-handle--start {
+  left: -16px;
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+}
+
+.clip-trimmer-handle--end {
+  right: -16px;
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.clip-trimmer-handle:focus-visible {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35);
+}
+
+.clip-trimmer-handle.is-active {
+  background: var(--trim-accent-strong);
+}
+
+.clip-trimmer-handle-grip {
+  width: 3px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  transition: background-color 150ms ease;
+}
+
+.clip-trimmer-handle.is-active .clip-trimmer-handle-grip {
+  background: #ffffff;
+}
+
+.clip-trimmer-tooltip {
+  position: absolute;
+  top: -32px;
+  left: 50%;
+  transform-origin: bottom center;
+  transform: translateX(-50%) scale(0.95);
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #0b1c30;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms ease-out, transform 140ms var(--trim-ease);
+}
+
+.clip-trimmer-tooltip.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.clip-trimmer-ruler {
+  position: relative;
+  margin-top: 8px;
+  height: 20px;
+}
+
+.clip-trimmer-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.clip-trimmer-tick-bar {
+  width: 1px;
+  height: 4px;
+  background: #cbd5e1;
+  transition: background-color 140ms ease;
+}
+
+.clip-trimmer-tick-bar.is-major {
+  height: 8px;
+}
+
+.clip-trimmer-tick-bar.is-snapped {
+  background: var(--trim-accent);
+}
+
+.clip-trimmer-tick-label {
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  transition: color 140ms ease;
+}
+
+.clip-trimmer-tick-label.is-snapped {
+  color: var(--trim-accent);
+}
+
+.clip-trimmer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-top: 0.35rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.clip-trimmer-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  font-size: 12px;
+  color: #475569;
+}
+
+.clip-trimmer-summary strong {
+  color: #0b1c30;
+}
+
+.clip-trimmer-dot {
+  color: #cbd5e1;
+}
+
+.clip-trimmer-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.32rem 0.68rem;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 140ms var(--trim-ease), background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.clip-trimmer-reset-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.clip-trimmer-reset-btn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .clip-trimmer-icon-btn:hover {
+    background: rgba(11, 28, 48, 0.9);
+  }
+  .clip-trimmer-handle:hover {
+    background: var(--trim-accent-strong);
+  }
+  .clip-trimmer-reset-btn:hover:not(:disabled) {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+  }
+}
+
+@media (max-width: 640px) {
+  .adv-wizard-field-row {
+    grid-template-columns: 1fr;
+  }
+  .clip-trimmer {
+    padding: 0.8rem;
+  }
+  .clip-trimmer-track-pad {
+    padding: 0.65rem 1.25rem 0;
+  }
+  .clip-trimmer-strip {
+    height: 58px;
+  }
+  .clip-trimmer-handle {
+    width: 20px;
+  }
+  .clip-trimmer-handle--start {
+    left: -20px;
+  }
+  .clip-trimmer-handle--end {
+    right: -20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clip-trimmer-icon-btn,
+  .clip-trimmer-reset-btn,
+  .clip-trimmer-tooltip {
+    transition-property: background-color, border-color, color, opacity;
+  }
+  .clip-trimmer-icon-btn:active,
+  .clip-trimmer-reset-btn:active:not(:disabled) {
+    transform: none;
   }
 }

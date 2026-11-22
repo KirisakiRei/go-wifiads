@@ -754,7 +754,7 @@ body.is-ad .app {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .screen, .btn-primary, .ad-timer-progress, .ad-edge-progress-fill {
+  .screen, .btn-primary, .ad-timer-progress, .ad-edge-progress-fill, .ad-play-overlay {
     animation: none !important;
     transition: none !important;
   }
@@ -897,4 +897,35 @@ body.is-ad .app {
 .btn-danger-outline:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+.ad-play-overlay {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: max-content;
+  height: max-content;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(15, 23, 42, 0.82);
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: transform 150ms cubic-bezier(0.23, 1, 0.32, 1), background-color 150ms ease;
+}
+.ad-play-overlay:active {
+  transform: scale(0.97);
+}
+.ad-play-overlay[hidden] {
+  display: none;
+}
+.ad-play-overlay-icon {
+  font-size: 0.95rem;
+  line-height: 1;
 }

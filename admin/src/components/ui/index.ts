@@ -1,5 +1,6 @@
 export * from './ad-media-thumb'
 export * from './ad-portal-preview'
+export * from './clip-trimmer'
 export * from './data-table-card'
 export * from './kpi-card'
 export * from './pagination'

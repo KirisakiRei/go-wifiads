@@ -1,0 +1,1 @@
+import{i as e,n as t}from"./api-client-N97ipOL9.js";var n={getLandingData:()=>t(`/api/v1/public/landing-data`),submitPartnerLead:n=>t(`/api/v1/public/partner-leads`,{method:`POST`,...e(n)})};export{n as t};

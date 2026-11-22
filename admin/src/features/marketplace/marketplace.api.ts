@@ -38,8 +38,17 @@ export interface UploadProgressInfo {
 export function uploadMultipartWithProgress(
   endpointPath: string,
   file: File,
-  onProgress?: (info: UploadProgressInfo) => void
-): Promise<{ url: string; key: string; media_type: 'image' | 'video'; size: number }> {
+  onProgress?: (info: UploadProgressInfo) => void,
+  extraFields?: Record<string, string | number | undefined>
+): Promise<{
+  url: string
+  key: string
+  media_type: 'image' | 'video'
+  size: number
+  duration_seconds?: number
+  transcoded?: boolean
+  poster_url?: string
+}> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${env.apiBaseUrl}${endpointPath}`, true)
@@ -70,6 +79,13 @@ export function uploadMultipartWithProgress(
 
     const fd = new FormData()
     fd.append('file', file)
+    if (extraFields) {
+      Object.entries(extraFields).forEach(([k, v]) => {
+        if (v !== undefined && v !== '') {
+          fd.append(k, String(v))
+        }
+      })
+    }
     xhr.send(fd)
   })
 }
@@ -311,8 +327,22 @@ export const advertiserApi = {
   getAnalytics: (params: { range?: string; campaign_id?: string; router_id?: string } = {}) =>
     apiClient<AdvertiserAnalytics>(`/api/v1/advertiser/analytics${buildQuery(params)}`),
 
-  uploadMedia: (file: File, onProgress?: (info: UploadProgressInfo) => void) =>
-    uploadMultipartWithProgress('/api/v1/advertiser/media/upload', file, onProgress),
+  uploadMedia: (
+    file: File,
+    onProgress?: (info: UploadProgressInfo) => void,
+    trim?: { start: number; end: number }
+  ) =>
+    uploadMultipartWithProgress(
+      '/api/v1/advertiser/media/upload',
+      file,
+      onProgress,
+      trim
+        ? {
+            trim_start: trim.start.toFixed(2),
+            trim_end: trim.end.toFixed(2),
+          }
+        : undefined
+    ),
   listCampaigns: (
     params: { page?: number; per_page?: number; status?: string; search?: string } = {}
   ) => apiRequest<CampaignItem[]>(`/api/v1/advertiser/campaigns${buildQuery(params)}`),

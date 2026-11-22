@@ -32,11 +32,6 @@
         <button type="button" class="btn-primary" id="start-button">
           Hubungkan Sekarang
         </button>
-        {{if ne (index .PortalSettings "portal.enable_voucher_redeem") "false"}}
-        <button type="button" class="btn-link-subtle" id="open-voucher-btn">
-          Punya kode voucher?
-        </button>
-        {{end}}
       </div>
     </section>
     <!-- ============ VOUCHER REDEEM MODAL (OPTIONAL VIP/CASHIER) ============ -->
@@ -114,7 +109,11 @@
         <div class="ad-media-wrap">
           {{if .Ad}}{{if .Ad.ImageURL}}
             {{if .IsVideo}}
-              <video id="ad-video" src="{{.Ad.ImageURL}}" preload="auto" muted playsinline loop></video>
+              <video id="ad-video" src="{{.Ad.ImageURL}}" preload="auto" muted playsinline webkit-playsinline></video>
+              <button type="button" id="ad-play-overlay" class="ad-play-overlay" hidden>
+                <span class="ad-play-overlay-icon" aria-hidden="true">&#9654;</span>
+                <span>Ketuk untuk Putar Iklan</span>
+              </button>
             {{else}}
               <img id="ad-image" src="{{.Ad.ImageURL}}" alt="Iklan" decoding="async">
             {{end}}

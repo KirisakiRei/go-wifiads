@@ -54,6 +54,7 @@
   var form = document.getElementById("hotspot-form");
   var videoStallTimer = null;
   var videoCnaFallbackTimer = null;
+  var videoWatchedSeconds = 0;
 
   var sessionToken = null;
   var sessionReady = false;
@@ -146,19 +147,21 @@
   }
 
   // ---------- Countdown ring ----------
-  function paintCountdown() {
-    countdownEls.forEach(function (el) { el.textContent = String(secondsLeft); });
-    countdownInlineEls.forEach(function (el) { el.textContent = String(secondsLeft); });
-    if (adDuration > 0) {
-      var elapsed = adDuration - secondsLeft;
-      var ratio = Math.min(1, Math.max(0, elapsed / adDuration));
-      rings.forEach(function (r) {
-        r.style.strokeDashoffset = String(RING_LEN * ratio);
-      });
-      if (edgeProgressFill) {
-        edgeProgressFill.style.width = String(Math.round(ratio * 100)) + "%";
-      }
+  function paintProgressRatio(ratio, displaySeconds) {
+    var clamped = Math.min(1, Math.max(0, ratio));
+    countdownEls.forEach(function (el) { el.textContent = String(displaySeconds); });
+    countdownInlineEls.forEach(function (el) { el.textContent = String(displaySeconds); });
+    rings.forEach(function (r) {
+      r.style.strokeDashoffset = String(RING_LEN * clamped);
+    });
+    if (edgeProgressFill) {
+      edgeProgressFill.style.width = String(Math.round(clamped * 100)) + "%";
     }
+  }
+
+  function paintCountdown() {
+    var ratio = adDuration > 0 ? (adDuration - secondsLeft) / adDuration : 1;
+    paintProgressRatio(ratio, secondsLeft);
   }
 
   function startCountdown() {
@@ -290,7 +293,10 @@
     var vid = document.getElementById("ad-video");
     var img = document.getElementById("ad-image");
     var labelEl = document.getElementById("ad-timer-label-text");
+    var playOverlay = document.getElementById("ad-play-overlay");
     var started = false;
+    var finished = false;
+    videoWatchedSeconds = 0;
     window.clearTimeout(videoStallTimer);
     window.clearTimeout(videoCnaFallbackTimer);
     if (edgeProgressFill) edgeProgressFill.style.width = "0%";
@@ -298,60 +304,145 @@
       window.clearTimeout(videoStallTimer);
       window.clearTimeout(videoCnaFallbackTimer);
     }
-    function beginTimerOnce() {
-      if (started) return;
-      started = true;
-      clearVideoTimers();
+    function setTimerLabelCountdown(rem) {
       if (labelEl) {
-        labelEl.innerHTML = 'Sisa <strong id="countdown">' + adDuration + '</strong> dtk';
+        labelEl.innerHTML = 'Sisa <strong id="countdown">' + rem + '</strong> dtk';
         countdownEls = [
           document.getElementById("countdown"),
           document.getElementById("countdown-portrait")
         ].filter(Boolean);
       }
+    }
+    function beginTimerOnce() {
+      if (started || finished) return;
+      started = true;
+      clearVideoTimers();
+      setTimerLabelCountdown(adDuration);
       applyAdLayout();
       startCountdown();
     }
     if (vid) {
-      if (labelEl) labelEl.textContent = "Memuat iklan...";
-      countdownEls.forEach(function (el) { el.textContent = "…"; });
-      var scheduleStallFallback = function () {
-        if (started) return;
-        window.clearTimeout(videoStallTimer);
-        videoStallTimer = window.setTimeout(beginTimerOnce, 5000);
-      };
-      var onReady = function () {
-        vid.removeEventListener("playing", onReady);
-        vid.removeEventListener("canplay", onReady);
-        vid.removeEventListener("waiting", scheduleStallFallback);
-        vid.removeEventListener("stalled", scheduleStallFallback);
-        beginTimerOnce();
-      };
-      // CNA fallback: if mobile captive webview never fires playing/canplay/ended,
-      // start the countdown anyway after max(adDuration, 10) seconds so user is never stuck.
-      var cnaDelayMs = Math.max(adDuration, 10) * 1000;
-      videoCnaFallbackTimer = window.setTimeout(beginTimerOnce, cnaDelayMs);
-      vid.addEventListener("waiting", scheduleStallFallback);
-      vid.addEventListener("stalled", scheduleStallFallback);
-      if (vid.readyState >= 3) {
+      var lastTime = Number(vid.currentTime || 0);
+      var hasPlayedFrame = false;
+
+      function setBufferingLabel() {
+        if (finished) return;
+        if (labelEl) {
+          labelEl.textContent = hasPlayedFrame ? "Buffering..." : "Memuat video...";
+        }
+      }
+
+      function completeVideoAd() {
+        if (finished) return;
+        finished = true;
+        clearVideoTimers();
+        if (playOverlay) playOverlay.hidden = true;
+        secondsLeft = 0;
+        videoWatchedSeconds = Math.max(videoWatchedSeconds, adDuration);
+        paintProgressRatio(1, 0);
+        finishCountdown();
+      }
+
+      function resetNoProgressGuard() {
+        window.clearTimeout(videoCnaFallbackTimer);
+        if (finished) return;
+        // Safety net only if video makes zero playback progress for 20s (broken CNA/network).
+        videoCnaFallbackTimer = window.setTimeout(function () {
+          if (finished) return;
+          setNotice(statusEl, "Koneksi video lambat. Anda tetap dapat melanjutkan setelah hitung mundur.", "");
+          beginTimerOnce();
+        }, 20000);
+      }
+
+      function onVideoTimeUpdate() {
+        if (finished || started) return;
+        if (vid.paused || vid.ended) return;
+        var curr = Number(vid.currentTime || 0);
+        var delta = curr - lastTime;
+        lastTime = curr;
+        // Count only genuine forward playback (ignore seeks or loop resets).
+        if (delta > 0 && delta < 1.5) {
+          if (!hasPlayedFrame) {
+            hasPlayedFrame = true;
+            if (playOverlay) playOverlay.hidden = true;
+            setTimerLabelCountdown(Math.max(1, Math.ceil(adDuration - videoWatchedSeconds)));
+            applyAdLayout();
+          }
+          videoWatchedSeconds += delta;
+          resetNoProgressGuard();
+          var remaining = Math.max(0, Math.ceil(adDuration - videoWatchedSeconds));
+          secondsLeft = remaining;
+          paintProgressRatio(adDuration > 0 ? videoWatchedSeconds / adDuration : 1, remaining);
+          if (videoWatchedSeconds >= adDuration) {
+            completeVideoAd();
+          }
+        }
+      }
+
+      function onVideoEnded() {
+        if (finished || started) return;
+        var dur = Number(vid.duration || 0);
+        // Complete if watched enough or the clip itself played through its full duration (>= adDuration - 0.6s).
+        if (videoWatchedSeconds >= adDuration - 0.6 || (hasPlayedFrame && dur > 0 && dur >= adDuration - 0.6)) {
+          completeVideoAd();
+          return;
+        }
+        // Short clip vs longer adDuration: seamlessly replay until adDuration is satisfied.
+        lastTime = 0;
+        try {
+          vid.currentTime = 0;
+          var rp = vid.play();
+          if (rp && typeof rp.catch === "function") rp.catch(function () {});
+        } catch (e) { /* ignore */ }
+      }
+
+      function tryStartPlay() {
+        if (finished) return;
         var p = vid.play();
         if (p && typeof p.then === "function") {
-          p.then(beginTimerOnce).catch(beginTimerOnce);
-        } else {
-          beginTimerOnce();
-        }
-      } else {
-        vid.addEventListener("playing", onReady);
-        vid.addEventListener("canplay", onReady);
-        vid.addEventListener("error", beginTimerOnce, { once: true });
-        scheduleStallFallback();
-        var playPromise = vid.play();
-        if (playPromise && typeof playPromise.catch === "function") {
-          playPromise.catch(function () {
-            scheduleStallFallback();
+          p.then(function () {
+            if (playOverlay) playOverlay.hidden = true;
+          }).catch(function () {
+            // Autoplay blocked on mobile webview: reveal tap-to-play CTA.
+            if (playOverlay && !finished) playOverlay.hidden = false;
+            if (labelEl && !hasPlayedFrame) labelEl.textContent = "Ketuk untuk putar";
           });
         }
       }
+
+      if (playOverlay) {
+        playOverlay.hidden = true;
+        playOverlay.onclick = function () {
+          playOverlay.hidden = true;
+          setBufferingLabel();
+          tryStartPlay();
+        };
+      }
+
+      setBufferingLabel();
+      paintProgressRatio(0, adDuration);
+      resetNoProgressGuard();
+
+      vid.addEventListener("timeupdate", onVideoTimeUpdate);
+      vid.addEventListener("ended", onVideoEnded);
+      vid.addEventListener("waiting", setBufferingLabel);
+      vid.addEventListener("stalled", setBufferingLabel);
+      vid.addEventListener("playing", function () {
+        if (finished || started) return;
+        if (playOverlay) playOverlay.hidden = true;
+        lastTime = Number(vid.currentTime || 0);
+        var rem = Math.max(1, Math.ceil(adDuration - videoWatchedSeconds));
+        setTimerLabelCountdown(rem);
+        resetNoProgressGuard();
+      });
+      vid.addEventListener("error", function () {
+        if (finished) return;
+        if (playOverlay) playOverlay.hidden = true;
+        setNotice(statusEl, "Video gagal dimuat di perangkat ini.", "");
+        beginTimerOnce();
+      }, { once: true });
+
+      tryStartPlay();
       return;
     }
 
@@ -620,7 +711,11 @@
 
   // ---------- Survey & Connect flow ----------
   function enterSurveyScreen() {
-    sendAdMetrics(true, adDuration);
+    var vid = document.getElementById("ad-video");
+    if (vid && typeof vid.pause === "function") {
+      try { vid.pause(); } catch (e) { /* ignore */ }
+    }
+    sendAdMetrics(true, Math.max(adDuration, Math.round(videoWatchedSeconds || 0)));
     if (settings["portal.enable_survey"] === "false") {
       submitSurveyAndConnect(true);
       return;

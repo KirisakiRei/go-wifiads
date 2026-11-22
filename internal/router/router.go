@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -146,7 +147,16 @@ func New(cfg *config.Config, db *gorm.DB, logger *slog.Logger) (*gin.Engine, err
 	engine.Use(middleware.Logger(logger))
 	engine.Use(middleware.CORS(cfg.Portal.AllowedLoginHosts))
 	engine.SetHTMLTemplate(templates)
-	engine.StaticFS("/static", http.FS(staticFS))
+	staticGroup := engine.Group("/static")
+	staticGroup.Use(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/static/admin/assets/") {
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			c.Header("Cache-Control", "public, max-age=3600")
+		}
+		c.Next()
+	})
+	staticGroup.StaticFS("/", http.FS(staticFS))
 	engine.GET("/uploads/*filepath", adHandler.ServeMedia)
 	engine.HEAD("/uploads/*filepath", adHandler.ServeMedia)
 	engine.GET("/map-tiles/:z/:x/:y", mapTileHandler.ServeTile)
