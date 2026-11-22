@@ -269,7 +269,7 @@ func (h *MapTileHandler) ResolveGoogleMapsLink(c *gin.Context) {
 	}
 
 	// 2. Extract URL from pasted text (supports full WhatsApp share text + link)
-	extractedURL := reExtractURL.FindString(raw)
+	extractedURL := extractFirstURL(raw)
 	if extractedURL == "" {
 		httpx.Error(c, http.StatusBadRequest, "BAD_REQUEST", "Format tautan Google Maps tidak dikenali. Silakan klik Bagikan (Share) di Google Maps lalu salin tautannya.", nil)
 		return
@@ -405,6 +405,23 @@ func (h *MapTileHandler) ResolveGoogleMapsLink(c *gin.Context) {
 	}
 
 	httpx.Error(c, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", "Titik koordinat tidak ditemukan pada tautan tersebut. Pastikan menyalin tautan lokasi spesifik atau cari nama jalan di kolom pencarian.", nil)
+}
+
+// extractFirstURL returns the first http(s) URL from raw input, splitting if a
+// second URL was pasted immediately after the first without whitespace.
+func extractFirstURL(raw string) string {
+	u := reExtractURL.FindString(raw)
+	if u == "" {
+		return ""
+	}
+	if len(u) > 8 {
+		for _, marker := range []string{"https://", "http://"} {
+			if idx := strings.Index(u[8:], marker); idx >= 0 {
+				u = u[:8+idx]
+			}
+		}
+	}
+	return strings.TrimRight(u, ".,);")
 }
 
 func isAllowedMapsHost(host string) bool {

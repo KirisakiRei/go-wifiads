@@ -1,4 +1,4 @@
-import { CheckCircle2, Link2, MapPin, Navigation, Search } from 'lucide-react'
+import { CheckCircle2, Link2, Loader2, MapPin, Navigation, Search, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { apiClient, jsonBody } from '@/lib/api-client'
@@ -56,9 +56,8 @@ export function RouterPinPicker({
   const [mode, setMode] = useState<'gmaps' | 'search'>('gmaps')
   const [gmapsInput, setGmapsInput] = useState('')
   const [resolvingLink, setResolvingLink] = useState(false)
-  // True once the pasted link produced a pin: the button would only resend it.
   const [linkResolved, setLinkResolved] = useState(false)
-
+  const [locatingGps, setLocatingGps] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [results, setResults] = useState<PlaceSearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -198,8 +197,10 @@ export function RouterPinPicker({
       toast.error('Browser tidak mendukung deteksi lokasi GPS')
       return
     }
+    setLocatingGps(true)
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        setLocatingGps(false)
         const lat = Number(pos.coords.latitude.toFixed(6))
         const lng = Number(pos.coords.longitude.toFixed(6))
         onChange(lat, lng)
@@ -208,12 +209,18 @@ export function RouterPinPicker({
         }
         toast.success('Peta diarahkan ke lokasi GPS Anda saat ini')
       },
-      () => toast.error('Izin lokasi ditolak atau gagal mendeteksi GPS')
+      () => {
+        setLocatingGps(false)
+        toast.error('Izin lokasi ditolak atau gagal mendeteksi GPS')
+      },
+      { timeout: 10000 }
     )
   }
 
+  const hasManualLink = gmapsInput.trim().length >= 5 && !linkResolved && !resolvingLink
+
   return (
-    <div style={{ display: 'grid', gap: '0.65rem' }}>
+    <div className="pin-picker-root" style={{ display: 'grid', gap: '0.7rem' }}>
       {/* Method Switcher */}
       <div
         style={{
@@ -224,54 +231,23 @@ export function RouterPinPicker({
           flexWrap: 'wrap',
         }}
       >
-        <div
-          style={{
-            display: 'inline-flex',
-            background: '#e2e8f0',
-            padding: '3px',
-            borderRadius: '10px',
-            gap: '3px',
-          }}
-        >
+        <div className="pin-seg-group" role="tablist" aria-label="Metode pencarian lokasi">
           <button
             type="button"
+            role="tab"
+            aria-selected={mode === 'gmaps'}
+            className={`pin-seg-btn ${mode === 'gmaps' ? 'active' : ''}`}
             onClick={() => setMode('gmaps')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '0.38rem 0.75rem',
-              borderRadius: '8px',
-              border: 'none',
-              background: mode === 'gmaps' ? '#ffffff' : 'transparent',
-              color: mode === 'gmaps' ? '#0f172a' : '#475569',
-              fontWeight: 700,
-              fontSize: '12px',
-              cursor: 'pointer',
-              boxShadow: mode === 'gmaps' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none',
-            }}
           >
             <Link2 size={13} color={mode === 'gmaps' ? accentColor : '#64748b'} />
             Link Google Maps
           </button>
-
           <button
             type="button"
+            role="tab"
+            aria-selected={mode === 'search'}
+            className={`pin-seg-btn ${mode === 'search' ? 'active' : ''}`}
             onClick={() => setMode('search')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '0.38rem 0.75rem',
-              borderRadius: '8px',
-              border: 'none',
-              background: mode === 'search' ? '#ffffff' : 'transparent',
-              color: mode === 'search' ? '#0f172a' : '#475569',
-              fontWeight: 700,
-              fontSize: '12px',
-              cursor: 'pointer',
-              boxShadow: mode === 'search' ? '0 1px 3px rgba(15,23,42,0.08)' : 'none',
-            }}
           >
             <Search size={13} color={mode === 'search' ? accentColor : '#64748b'} />
             Cari Nama Jalan
@@ -280,106 +256,110 @@ export function RouterPinPicker({
 
         <button
           type="button"
-          className="btn btn-secondary"
-          style={{ padding: '0.4rem 0.75rem', fontSize: '12px' }}
+          className="btn btn-secondary pin-gps-btn"
           onClick={handleUseMyGPS}
+          disabled={locatingGps}
         >
-          <Navigation size={13} /> Lokasi Saya (GPS)
+          {locatingGps ? (
+            <Loader2 size={13} className="pin-spin" />
+          ) : (
+            <Navigation size={13} />
+          )}
+          {locatingGps ? 'Mendeteksi...' : 'Lokasi Saya (GPS)'}
         </button>
       </div>
 
-      {/* Mode 1: Paste Google Maps Share Link */}
+      {/* Mode 1: Paste Google Maps Share Link (auto-resolves on paste, no redundant primary button) */}
       {mode === 'gmaps' ? (
-        <div style={{ display: 'grid', gap: '0.35rem' }}>
-          <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', flex: 1, minWidth: '210px' }}>
-              <Link2
-                size={14}
-                style={{
-                  position: 'absolute',
-                  left: '11px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#64748b',
-                }}
-              />
-              <input
-                type="text"
-                value={gmapsInput}
-                onChange={(e) => {
-                  setGmapsInput(e.target.value)
-                  setLinkResolved(false)
-                }}
-                onPaste={(e) => {
-                  const pasted = e.clipboardData.getData('text')
-                  if (
-                    pasted &&
-                    (pasted.includes('goo.gl') || pasted.includes('google.com/maps') || pasted.includes('maps.google'))
-                  ) {
-                    setGmapsInput(pasted)
-                    setLinkResolved(false)
-                    setTimeout(() => resolveGoogleMapsShare(pasted), 60)
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    resolveGoogleMapsShare()
-                  }
-                }}
-                placeholder="Tempel link Share Google Maps (misal: https://maps.app.goo.gl/...)"
-                style={{
-                  width: '100%',
-                  padding: '0.55rem 0.75rem 0.55rem 2.1rem',
-                  fontSize: '12.5px',
-                  borderRadius: '9px',
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                }}
-              />
-            </div>
-
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{
-                padding: '0.5rem 0.95rem',
-                fontSize: '12px',
-                background: accentColor,
+        <div style={{ display: 'grid', gap: '0.4rem' }}>
+          <div className="pin-input-wrap">
+            <Link2 size={15} className="pin-input-icon" />
+            <input
+              type="text"
+              className="pin-input"
+              value={gmapsInput}
+              onChange={(e) => {
+                setGmapsInput(e.target.value)
+                setLinkResolved(false)
               }}
-              onClick={() => resolveGoogleMapsShare()}
-              disabled={resolvingLink || linkResolved}
-            >
-              {linkResolved
-                ? 'Lokasi Sudah Diambil'
-                : resolvingLink
-                  ? 'Mengambil Titik...'
-                  : 'Ambil Lokasi'}
-            </button>
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData('text').trim()
+                if (!pasted) return
+                // Prevent native paste from appending onto the controlled value.
+                e.preventDefault()
+                setGmapsInput(pasted)
+                setLinkResolved(false)
+                const isMapsLink =
+                  pasted.includes('goo.gl') ||
+                  pasted.includes('google.com/maps') ||
+                  pasted.includes('maps.google') ||
+                  /^-?\d+\.\d+\s*,\s*-?\d+\.\d+$/.test(pasted)
+                if (isMapsLink) {
+                  void resolveGoogleMapsShare(pasted)
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  if (!resolvingLink && !linkResolved) {
+                    void resolveGoogleMapsShare()
+                  }
+                }
+              }}
+              placeholder="Tempel link Bagikan Google Maps di sini (otomatis terdeteksi)..."
+              style={{ paddingRight: resolvingLink ? '7.5rem' : linkResolved ? '4.5rem' : hasManualLink ? '5rem' : '0.85rem' }}
+            />
+            <div className="pin-input-trailing">
+              {resolvingLink && (
+                <span className="pin-resolving-tag">
+                  <Loader2 size={13} className="pin-spin" />
+                  Mencari...
+                </span>
+              )}
+              {linkResolved && !resolvingLink && (
+                <>
+                  <CheckCircle2 size={16} color={accentColor} aria-label="Lokasi berhasil diambil" />
+                  <button
+                    type="button"
+                    className="pin-clear-btn"
+                    title="Ganti tautan"
+                    aria-label="Hapus tautan Google Maps"
+                    onClick={() => {
+                      setGmapsInput('')
+                      setLinkResolved(false)
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                </>
+              )}
+              {hasManualLink && (
+                <button
+                  type="button"
+                  className="pin-inline-btn"
+                  style={{ background: accentColor }}
+                  onClick={() => void resolveGoogleMapsShare()}
+                >
+                  Cari
+                </button>
+              )}
+            </div>
           </div>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>
-            Tempel link <strong>Bagikan (Share)</strong> dari Google Maps — titik lokasi langsung
-            diambil otomatis. Untuk lokasi lain: buka tempat usaha di Google Maps →{' '}
-            <strong>Bagikan</strong> → <strong>Salin Link</strong>, lalu tempel di kolom atas.
+          <span style={{ fontSize: '11.5px', color: '#64748b', lineHeight: 1.45 }}>
+            Buka lokasi di Google Maps → ketuk <strong>Bagikan</strong> →{' '}
+            <strong>Salin Link</strong>, lalu tempel di atas. Titik peta otomatis terisi tanpa
+            perlu klik tombol tambahan.
           </span>
         </div>
       ) : (
         /* Mode 2: Street / Place Search */
         <div style={{ position: 'relative' }}>
           <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', flex: 1, minWidth: '210px' }}>
-              <Search
-                size={14}
-                style={{
-                  position: 'absolute',
-                  left: '11px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#64748b',
-                }}
-              />
+            <div className="pin-input-wrap" style={{ flex: 1, minWidth: '210px' }}>
+              <Search size={15} className="pin-input-icon" />
               <input
                 type="text"
+                className="pin-input"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
@@ -389,47 +369,31 @@ export function RouterPinPicker({
                   }
                 }}
                 placeholder="Ketik nama jalan, kecamatan, atau kota lalu tekan Enter..."
-                style={{
-                  width: '100%',
-                  padding: '0.55rem 0.75rem 0.55rem 2.1rem',
-                  fontSize: '12.5px',
-                  borderRadius: '9px',
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                }}
               />
             </div>
-
             <button
               type="button"
               className="btn btn-primary"
               style={{
-                padding: '0.5rem 0.95rem',
-                fontSize: '12px',
+                padding: '0.52rem 0.95rem',
+                fontSize: '12.5px',
                 background: accentColor,
               }}
               onClick={handleSearchPlace}
               disabled={searching}
             >
+              {searching ? <Loader2 size={14} className="pin-spin" /> : null}
               {searching ? 'Mencari...' : 'Cari Alamat'}
             </button>
           </div>
-
           {results.length > 0 && (
-            <div
-              style={{
-                marginTop: '0.35rem',
-                background: '#ffffff',
-                border: '1px solid #cbd5e1',
-                borderRadius: '10px',
-                boxShadow: '0 8px 20px rgba(15,23,42,0.1)',
-                overflow: 'hidden',
-              }}
-            >
+            <div className="pin-search-dropdown" role="listbox">
               {results.map((item, idx) => (
                 <button
                   key={`${item.latitude}-${item.longitude}-${idx}`}
                   type="button"
+                  role="option"
+                  className="pin-search-item"
                   onClick={() => {
                     const lat = Number(item.latitude.toFixed(6))
                     const lng = Number(item.longitude.toFixed(6))
@@ -441,20 +405,6 @@ export function RouterPinPicker({
                       mapRef.current.setView([lat, lng], 17, { animate: true })
                     }
                     setResults([])
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '0.55rem 0.8rem',
-                    border: 'none',
-                    borderBottom: idx < results.length - 1 ? '1px solid #f1f5f9' : 'none',
-                    background: '#ffffff',
-                    textAlign: 'left',
-                    fontSize: '12px',
-                    color: '#0f172a',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.45rem',
                   }}
                 >
                   <MapPin size={14} color="#ea4335" style={{ flexShrink: 0 }} />
@@ -471,43 +421,29 @@ export function RouterPinPicker({
       {/* Interactive Map */}
       <div
         ref={containerRef}
+        className="pin-map-frame"
         style={{
           width: '100%',
           height: `${height}px`,
-          borderRadius: '12px',
-          border: hasValidCoords ? `1.5px solid ${accentColor}` : '1px solid #cbd5e1',
-          overflow: 'hidden',
-          zIndex: 1,
+          borderColor: hasValidCoords ? accentColor : '#cbd5e1',
         }}
       />
 
       {/* Friendly Pin Status Pill (no raw coordinates required) */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.45rem',
-          padding: '0.55rem 0.8rem',
-          borderRadius: '10px',
-          background: hasValidCoords ? '#ecfdf5' : '#fffbeb',
-          border: `1px solid ${hasValidCoords ? '#a7f3d0' : '#fde68a'}`,
-          color: hasValidCoords ? '#065f46' : '#92400e',
-          fontSize: '12px',
-        }}
-      >
+      <div className={`pin-status-pill ${hasValidCoords ? 'is-set' : 'is-empty'}`}>
         {hasValidCoords ? (
           <>
             <CheckCircle2 size={15} style={{ flexShrink: 0 }} />
             <span>
               <strong>Titik lokasi sudah ditandai di peta.</strong> Anda juga dapat menggeser pin
-              merah secara langsung agar tepat berada di posisi usaha Anda.
+              merah langsung agar tepat di posisi usaha Anda.
             </span>
           </>
         ) : (
           <>
             <MapPin size={15} style={{ flexShrink: 0 }} />
             <span>
-              Belum ada titik lokasi yang dipilih. Tempel link Google Maps, cari jalan, atau klik
+              Belum ada titik lokasi dipilih. Tempel link Google Maps, cari nama jalan, atau klik
               langsung pada peta di atas.
             </span>
           </>

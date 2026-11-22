@@ -72,6 +72,14 @@ func TestExtractGoogleMapsCoordinates(t *testing.T) {
 	}
 }
 
+func TestExtractFirstURLGluedDuplicate(t *testing.T) {
+	got := extractFirstURL("https://maps.app.goo.gl/dsTfsZ8Kf5UKjYeo8https://maps.app.goo.gl/dsTfsZ8Kf5UKjYeo8")
+	want := "https://maps.app.goo.gl/dsTfsZ8Kf5UKjYeo8"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
 // A dead or expired share link answers 404 from Google: the API must say the link
 // is gone instead of blaming the pin coordinates.
 func TestResolveGoogleMapsLinkExpiredLink(t *testing.T) {

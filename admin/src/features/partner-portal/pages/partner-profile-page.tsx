@@ -20,6 +20,7 @@ export function PartnerProfilePage() {
   const [venueCategory, setVenueCategory] = useState('Kafe')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
+  const [suggestedAddress, setSuggestedAddress] = useState('')
   const [latitude, setLatitude] = useState<number | null>(null)
   const [longitude, setLongitude] = useState<number | null>(null)
   const [bankName, setBankName] = useState('')
@@ -69,6 +70,7 @@ export function PartnerProfilePage() {
       queryClient.setQueryData(partnerAuthQueryKey, updated)
       queryClient.invalidateQueries({ queryKey: ['partner-overview'] })
       queryClient.invalidateQueries({ queryKey: ['partner-routers'] })
+      setSuggestedAddress('')
       toast.success('Profil, titik koordinat lokasi, dan rekening berhasil disimpan!')
     },
     onError: (err: Error) => toast.error(err.message),
@@ -95,14 +97,7 @@ export function PartnerProfilePage() {
       <WavyHeader title="Profil, Titik Peta Lokasi & Rekening" />
 
       <div className="stitch-page-stage">
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-            gap: '1.5rem',
-            alignItems: 'start',
-          }}
-        >
+        <div className="partner-profile-grid">
           {/* Main Profile & Mandatory Map Coordinates Form */}
           <form
             onSubmit={(e) => {
@@ -110,7 +105,7 @@ export function PartnerProfilePage() {
               updateProfileMutation.mutate()
             }}
             className="stitch-card-container"
-            style={{ background: '#ffffff', padding: '1.5rem', display: 'grid', gap: '1.25rem' }}
+            style={{ background: '#ffffff', padding: '1.6rem', display: 'grid', gap: '1.4rem' }}
           >
             <div>
               <h3
@@ -120,18 +115,19 @@ export function PartnerProfilePage() {
                   fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.45rem',
+                  gap: '0.5rem',
+                  color: '#0b1c30',
                 }}
               >
                 <Store size={18} color="#059669" /> Informasi Tempat Usaha &amp; Titik Peta
               </h3>
-              <p style={{ margin: '3px 0 0', fontSize: '12px', color: '#64748b' }}>
-                Nama lokasi dan titik koordinat peta di bawah ini akan ditampilkan kepada para
-                pengiklan saat memilih lokasi penayangan iklan.
+              <p style={{ margin: '4px 0 0', fontSize: '12.5px', color: '#64748b', lineHeight: 1.5 }}>
+                Nama lokasi dan titik peta di bawah ini tampil kepada pengiklan saat memilih lokasi
+                penayangan iklan.
               </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+            <div className="partner-field-row">
               <div className="form-field">
                 <label>Nama Tempat Usaha / Kafe *</label>
                 <input
@@ -153,7 +149,7 @@ export function PartnerProfilePage() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+            <div className="partner-field-row">
               <div className="form-field">
                 <label>Nama Penanggung Jawab *</label>
                 <input value={name} onChange={(e) => setName(e.target.value)} required />
@@ -169,31 +165,22 @@ export function PartnerProfilePage() {
             </div>
 
             {/* Mandatory Map Pin + Address Section */}
-            <div
-              style={{
-                background: '#f8fafc',
-                border: '1.5px solid #cbd5e1',
-                borderRadius: '13px',
-                padding: '1.1rem',
-                display: 'grid',
-                gap: '0.85rem',
-              }}
-            >
-              <div>
+            <div className="partner-map-section">
+              <div style={{ display: 'grid', gap: '0.2rem' }}>
                 <strong
                   style={{
-                    fontSize: '13px',
-                    color: '#0f172a',
+                    fontSize: '13.5px',
+                    color: '#0b1c30',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.4rem',
+                    gap: '0.45rem',
                   }}
                 >
-                  <MapPin size={16} color="#ea4335" /> Titik Koordinat Peta &amp; Alamat Lengkap (Wajib) *
+                  <MapPin size={16} color="#ea4335" /> Titik Peta &amp; Alamat Lengkap (Wajib) *
                 </strong>
-                <span style={{ fontSize: '11px', color: '#64748b' }}>
-                  Paste link Google Maps (tombol Bagikan) atau cari nama jalan, lalu geser pin
-                  merah tepat pada posisi tempat usaha Anda.
+                <span style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.45 }}>
+                  Tempel link Google Maps atau cari nama jalan, lalu geser pin merah bila perlu
+                  menyesuaikan posisi tepat usaha Anda.
                 </span>
               </div>
 
@@ -207,17 +194,38 @@ export function PartnerProfilePage() {
                 onAddressFound={(foundAddr) => {
                   if (!address.trim()) {
                     setAddress(foundAddr)
+                    setSuggestedAddress('')
+                  } else if (foundAddr.trim() !== address.trim()) {
+                    setSuggestedAddress(foundAddr)
                   }
                 }}
-                height={280}
+                height={300}
               />
 
               <div className="form-field">
                 <label>Alamat Lengkap Lokasi *</label>
+                {suggestedAddress && (
+                  <button
+                    type="button"
+                    className="partner-address-chip"
+                    onClick={() => {
+                      setAddress(suggestedAddress)
+                      setSuggestedAddress('')
+                    }}
+                  >
+                    <MapPin size={13} style={{ flexShrink: 0 }} />
+                    <span className="partner-address-chip-text">
+                      Gunakan alamat peta: {suggestedAddress}
+                    </span>
+                  </button>
+                )}
                 <textarea
                   rows={2}
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                  onChange={(e) => {
+                    setAddress(e.target.value)
+                    if (suggestedAddress) setSuggestedAddress('')
+                  }}
                   placeholder="Contoh: Jl. Iskandar Muda No. 45, Kec. Medan Baru, Kota Medan"
                   required
                 />
@@ -227,25 +235,24 @@ export function PartnerProfilePage() {
             {/* Bank Account Section */}
             <div
               style={{
-                paddingTop: '0.5rem',
+                paddingTop: '1.1rem',
                 borderTop: '1px solid #e2e8f0',
                 display: 'grid',
-                gap: '0.85rem',
+                gap: '0.9rem',
               }}
             >
               <strong
                 style={{
-                  fontSize: '13px',
-                  color: '#0f172a',
+                  fontSize: '13.5px',
+                  color: '#0b1c30',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.4rem',
+                  gap: '0.45rem',
                 }}
               >
                 <CreditCard size={16} color="#059669" /> Rekening Bank Pencairan Pendapatan
               </strong>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+              <div className="partner-field-row">
                 <div className="form-field">
                   <label>Nama Bank</label>
                   <input
@@ -263,7 +270,6 @@ export function PartnerProfilePage() {
                   />
                 </div>
               </div>
-
               <div className="form-field">
                 <label>Atas Nama Pemilik Rekening</label>
                 <input
@@ -274,12 +280,12 @@ export function PartnerProfilePage() {
               </div>
             </div>
 
-            <div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '0.25rem' }}>
               <button
                 type="submit"
                 className="btn btn-primary"
-                style={{ background: '#059669' }}
                 disabled={updateProfileMutation.isPending}
+                style={{ padding: '0.7rem 1.35rem' }}
               >
                 <Save size={16} />
                 {updateProfileMutation.isPending
@@ -295,41 +301,45 @@ export function PartnerProfilePage() {
               e.preventDefault()
               passwordMutation.mutate()
             }}
-            className="stitch-card-container"
-            style={{ background: '#ffffff', padding: '1.5rem', display: 'grid', gap: '1rem' }}
+            className="stitch-card-container partner-security-card"
+            style={{ background: '#ffffff', padding: '1.5rem', display: 'grid', gap: '1.05rem' }}
           >
-            <h3
-              style={{
-                margin: 0,
-                fontSize: '15px',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-              }}
-            >
-              <Key size={17} color="#2563eb" /> Keamanan &amp; Kata Sandi
-            </h3>
-
+            <div>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: '15.5px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  color: '#0b1c30',
+                }}
+              >
+                <Key size={17} color="#059669" /> Keamanan &amp; Kata Sandi
+              </h3>
+              <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b', lineHeight: 1.45 }}>
+                Perbarui kata sandi akun portal mitra Anda secara berkala.
+              </p>
+            </div>
             <div className="form-field">
               <label>Username / Email Akun Mitra</label>
               <input
                 value={partner.username || partner.email || '-'}
                 disabled
-                style={{ background: '#f8fafc' }}
+                style={{ background: '#f8fafc', color: '#64748b' }}
               />
             </div>
-
             <div className="form-field">
               <label>Kata Sandi Saat Ini</label>
               <input
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
+                autoComplete="current-password"
                 required
               />
             </div>
-
             <div className="form-field">
               <label>Kata Sandi Baru (Min. 6 Karakter)</label>
               <input
@@ -337,14 +347,15 @@ export function PartnerProfilePage() {
                 minLength={6}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
                 required
               />
             </div>
-
             <button
               type="submit"
               className="btn btn-secondary"
               disabled={passwordMutation.isPending}
+              style={{ marginTop: '0.25rem' }}
             >
               {passwordMutation.isPending ? 'Memperbarui...' : 'Perbarui Kata Sandi'}
             </button>
