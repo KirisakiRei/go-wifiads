@@ -1077,6 +1077,16 @@ export function AdminPartnersPage() {
                     ? `${settingsPartner.bank_name} — ${settingsPartner.bank_account_number} (a.n. ${settingsPartner.bank_account_holder})`
                     : 'Belum diisi oleh mitra'}
                 </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Router Terkait:</span>{' '}
+                  {settingsPartner.routers_count > 0 ? (
+                    <strong style={{ color: '#059669' }}>
+                      {settingsPartner.routers_count} Router ({settingsPartner.router_names.join(', ')})
+                    </strong>
+                  ) : (
+                    <span style={{ color: '#94a3b8' }}>Belum dikaitkan ke router mana pun</span>
+                  )}
+                </div>
               </div>
             )}
 

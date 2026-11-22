@@ -2,15 +2,14 @@ import { useState } from 'react'
 import {
   Activity,
   ArrowDown,
-  ArrowRight,
   ArrowUp,
   Clock,
   Globe,
   Plus,
   RefreshCw,
   Router,
+  Settings,
   Smartphone,
-  Terminal,
   Trash2,
   Wifi,
 } from 'lucide-react'
@@ -310,7 +309,7 @@ export function RoutersPage() {
                     <button
                       type="button"
                       className="btn btn-secondary"
-                      style={{ fontSize: '12px', padding: '0.55rem 0.75rem' }}
+                      style={{ flex: 1, fontSize: '12px', padding: '0.55rem 0.75rem' }}
                       onClick={() => navigate(`/sessions?router_id=${r.id}`)}
                     >
                       <Activity size={13} />
@@ -319,22 +318,12 @@ export function RoutersPage() {
 
                     <button
                       type="button"
-                      className="btn btn-secondary"
-                      style={{ fontSize: '12px', padding: '0.55rem 0.75rem' }}
-                      onClick={() => navigate(`/routers/${r.id}`)}
-                    >
-                      <Terminal size={13} />
-                      Script
-                    </button>
-
-                    <button
-                      type="button"
                       className="btn btn-primary"
                       style={{ flex: 1, fontSize: '12px', padding: '0.55rem 0.85rem' }}
                       onClick={() => navigate(`/routers/${r.id}`)}
                     >
-                      Atur
-                      <ArrowRight size={13} />
+                      <Settings size={13} />
+                      Pengaturan
                     </button>
 
                     {isConfirmingDelete ? (

@@ -47,11 +47,19 @@ export function RouterDetailPage() {
     queryFn: adminMarketplaceApi.listTiers,
   })
   const locationTiers = useMemo(() => locationTiersData ?? [], [locationTiersData])
-  const { data: partnersRes } = useQuery({
+  const { data: partnerOptions = [] } = useQuery({
     queryKey: ['admin-partners-select'],
-    queryFn: () => adminMarketplaceApi.listPartners({ page: 1, per_page: 200 }),
+    queryFn: async () => {
+      const first = await adminMarketplaceApi.listPartners({ page: 1, per_page: 100 })
+      const all = [...(first.data || [])]
+      const totalPages = first.meta?.total_pages || 1
+      for (let p = 2; p <= totalPages; p++) {
+        const next = await adminMarketplaceApi.listPartners({ page: p, per_page: 100 })
+        if (next.data?.length) all.push(...next.data)
+      }
+      return all
+    },
   })
-  const partnerOptions = partnersRes?.data || []
 
   const currentRouter = useMemo(
     () => (isNew ? undefined : routers.find((r) => r.id === id)),
@@ -212,6 +220,8 @@ export function RouterDetailPage() {
     onSuccess: (saved) => {
       toast.success('Pengaturan router berhasil disimpan')
       queryClient.invalidateQueries({ queryKey: ['routers'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-partners'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-partners-select'] })
       if (isNew) {
         navigate(`/routers/${saved.id}`, { replace: true })
       }
